@@ -1833,3 +1833,183 @@ html.is-native .portal-shell.teresa-inside .drawer-layer {
   font-size: 12px;
   color: var(--sw-muted, #64748b);
 }
+.portal-shell.teresa-inside .register-cta {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--sw-line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff, #eef4fd);
+}
+.portal-shell.teresa-inside .register-cta strong {
+  font-size: 15px;
+}
+.portal-shell.teresa-inside .register-cta p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sw-muted, #64748b);
+}
+.portal-shell.teresa-inside .register-button {
+  justify-self: start;
+  margin-top: 4px;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sw-blue);
+  color: #fff;
+  font-weight: 600;
+}
+.portal-shell.teresa-inside .register-cta.registered {
+  background: linear-gradient(180deg, #fff, #e9f9ef);
+}
+.portal-shell.teresa-inside .event-registered-tag {
+  margin-top: 4px;
+}
+.portal-shell.teresa-inside .ticket-card {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 20px 18px;
+  border: 1px solid var(--sw-line);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(11, 27, 58, 0.1);
+  text-align: center;
+}
+.portal-shell.teresa-inside .ticket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.portal-shell.teresa-inside .ticket-head img {
+  height: 24px;
+}
+.portal-shell.teresa-inside .ticket-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.portal-shell.teresa-inside .ticket-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--sw-muted, #64748b);
+}
+.portal-shell.teresa-inside .ticket-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.portal-shell.teresa-inside .ticket-meta svg {
+  width: 15px;
+  height: 15px;
+}
+.portal-shell.teresa-inside .ticket-qr {
+  width: 220px;
+  height: 220px;
+  border-radius: 14px;
+  border: 1px solid var(--sw-line);
+}
+.portal-shell.teresa-inside .ticket-qr-loading {
+  background: repeating-conic-gradient(#eef2f9 0% 25%, #f7f9fc 0% 50%) 50% / 22px 22px;
+}
+.portal-shell.teresa-inside .ticket-hint {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.portal-shell.teresa-inside .ticket-details {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin: 4px 0 0;
+}
+.portal-shell.teresa-inside .ticket-details > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.portal-shell.teresa-inside .ticket-details dt {
+  font-size: 12px;
+  color: var(--sw-muted, #64748b);
+}
+.portal-shell.teresa-inside .ticket-details dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.portal-shell.teresa-inside .ticket-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.4px;
+}
+.portal-shell.teresa-inside .ticket-copy {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--sw-line);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 600;
+  color: var(--sw-blue);
+}
+.portal-shell.teresa-inside .notification-button {
+  position: relative;
+}
+.portal-shell.teresa-inside .notification-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.portal-shell.teresa-inside .notify-list {
+  display: grid;
+  gap: 10px;
+}
+.portal-shell.teresa-inside .notify-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--sw-line);
+  border-radius: 14px;
+  background: #fff;
+}
+.portal-shell.teresa-inside .notify-ico {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #e7effe;
+  color: var(--sw-blue);
+}
+.portal-shell.teresa-inside .notify-ico svg {
+  width: 18px;
+  height: 18px;
+}
+.portal-shell.teresa-inside .notify-item strong {
+  font-size: 14px;
+}
+.portal-shell.teresa-inside .notify-item p {
+  margin: 2px 0 4px;
+  font-size: 13px;
+  color: var(--sw-muted, #64748b);
+}
+.portal-shell.teresa-inside .notify-item small {
+  font-size: 11px;
+  color: var(--sw-muted, #64748b);
+}

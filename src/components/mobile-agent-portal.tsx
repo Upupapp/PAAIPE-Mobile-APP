@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import logo from "../assets/paaipe-logo.png";
 import eventCover from "../assets/ai-exchange-cover.png";
+import QRCode from "qrcode";
 import "./portal-teresa.css";
 import { MobileOnboarding } from "./mobile-onboarding";
 import { useAuth } from "../lib/auth-context";
@@ -169,6 +170,76 @@ function readPublicCard(): PublicCard | null {
 
 function writePublicCard(card: PublicCard) {
   localStorage.setItem(PUBLIC_CARD_KEY, JSON.stringify(card));
+}
+
+export type EventTicket = {
+  eventId: string;
+  eventTitle: string;
+  eventDate: string;
+  eventTime: string;
+  attendeeName: string;
+  attendeeEmail: string;
+  note: string;
+  code: string;
+  reference: string;
+  createdAt: string;
+};
+
+export type AppNotification = {
+  id: string;
+  title: string;
+  body: string;
+  at: number;
+  read: boolean;
+};
+
+const TICKETS_KEY = "paaipe-event-tickets";
+const NOTIFICATIONS_KEY = "paaipe-notifications";
+
+function readTickets(): Record<string, EventTicket> {
+  try {
+    const raw = localStorage.getItem(TICKETS_KEY);
+    if (!raw) return {};
+    const value = JSON.parse(raw) as unknown;
+    return value && typeof value === "object" ? (value as Record<string, EventTicket>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function readNotifications(): AppNotification[] {
+  try {
+    const raw = localStorage.getItem(NOTIFICATIONS_KEY);
+    if (!raw) return [];
+    const value = JSON.parse(raw) as unknown;
+    return Array.isArray(value) ? (value as AppNotification[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeTickets(tickets: Record<string, EventTicket>) {
+  localStorage.setItem(TICKETS_KEY, JSON.stringify(tickets));
+}
+
+function writeNotifications(notifications: AppNotification[]) {
+  localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications.slice(0, 30)));
+}
+
+function ticketCode(eventId: string): string {
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const stamp = Date.now().toString(36).slice(-4).toUpperCase();
+  return `PAAIPE-${eventId.slice(0, 6).toUpperCase()}-${stamp}${rand}`;
+}
+
+function relativeTime(at: number): string {
+  const diff = Math.max(0, Date.now() - at);
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 const PREVIEW_IDENTITY: DisplayIdentity = {
@@ -319,6 +390,8 @@ export function MobileAgentPortal() {
   const [selectedSession, setSelectedSession] = useState<ApiSession | null>(null);
   const [selectedMember, setSelectedMember] = useState<DirectoryMember | null>(null);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(FEED_SEED);
+  const [tickets, setTickets] = useState<Record<string, EventTicket>>(() => readTickets());
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => readNotifications());
   const [learnLane, setLearnLane] = useState<"Sessions" | "Micros" | "Playlists" | "Resources">("Sessions");
   const [active, setActive] = useState<View>("Home");
   const [activeBranch, setActiveBranch] = useState<Branch>("Home");
@@ -536,6 +609,60 @@ export function MobileAgentPortal() {
     initials,
   };
   const photo = publicCard?.photo ?? "";
+  const registerForEvent = (
+    event: ApiEvent,
+    form: { name: string; email: string; note: string },
+  ): EventTicket => {
+    const ticket: EventTicket = {
+      eventId: event.id,
+      eventTitle: event.title || "PAAIPE event",
+      eventDate: event.date || "Date to be announced",
+      eventTime: event.startTime
+        ? `${event.startTime}${event.endTime ? ` – ${event.endTime}` : ""}`
+        : "",
+      attendeeName: form.name.trim() || shownIdentity.displayName,
+      attendeeEmail: form.email.trim(),
+      note: form.note.trim(),
+      code: ticketCode(event.id),
+      reference: `REG-${Date.now().toString(36).toUpperCase()}`,
+      createdAt: new Date().toISOString(),
+    };
+    setTickets((current) => {
+      const next = { ...current, [event.id]: ticket };
+      writeTickets(next);
+      return next;
+    });
+    const note: AppNotification = {
+      id: `n-${Date.now()}`,
+      title: "You're registered",
+      body: `Your spot for ${ticket.eventTitle} is saved. Open Events to view your ticket and QR code.`,
+      at: Date.now(),
+      read: false,
+    };
+    setNotifications((current) => {
+      const next = [note, ...current];
+      writeNotifications(next);
+      return next;
+    });
+    return ticket;
+  };
+  const cancelRegistration = (eventId: string) => {
+    setTickets((current) => {
+      const next = { ...current };
+      delete next[eventId];
+      writeTickets(next);
+      return next;
+    });
+  };
+  const markNotificationsRead = () => {
+    setNotifications((current) => {
+      if (!current.some((item) => !item.read)) return current;
+      const next = current.map((item) => ({ ...item, read: true }));
+      writeNotifications(next);
+      return next;
+    });
+  };
+  const unreadCount = notifications.filter((item) => !item.read).length;
   const savePublicCard = async (next: PublicCard) => {
     const saved = { ...next, name: next.name.trim() };
     setPublicCard(saved);
@@ -605,11 +732,15 @@ export function MobileAgentPortal() {
             ) : null}
             <button
               className="icon-button notification-button"
-              aria-label="Notifications"
+              aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
               type="button"
-              onClick={() => setNotificationsOpen(true)}
+              onClick={() => {
+                setNotificationsOpen(true);
+                markNotificationsRead();
+              }}
             >
               <Bell />
+              {unreadCount ? <span className="notification-dot">{unreadCount}</span> : null}
             </button>
           </div>
         </header>
@@ -641,7 +772,16 @@ export function MobileAgentPortal() {
               onOpen={openSession}
             />
           )}
-          {active === "Events" && <EventsView events={events} loadState={eventData} />}
+          {active === "Events" && (
+            <EventsView
+              events={events}
+              loadState={eventData}
+              identity={shownIdentity}
+              tickets={tickets}
+              onRegister={registerForEvent}
+              onCancel={cancelRegistration}
+            />
+          )}
           {active === "Profile" && (
             <ProfileView
               identity={shownIdentity}
@@ -879,9 +1019,26 @@ export function MobileAgentPortal() {
                   <X />
                 </button>
               </div>
-              <div className="empty-note">
-                No notifications yet. Updates will appear here when available.
-              </div>
+              {notifications.length === 0 ? (
+                <div className="empty-note">
+                  No notifications yet. Updates will appear here when available.
+                </div>
+              ) : (
+                <div className="notify-list">
+                  {notifications.map((item) => (
+                    <article className="notify-item" key={item.id}>
+                      <span className="notify-ico" aria-hidden="true">
+                        <CalendarDays />
+                      </span>
+                      <div>
+                        <strong>{item.title}</strong>
+                        <p>{item.body}</p>
+                        <small>{relativeTime(item.at)}</small>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </aside>
           </div>
         )}
@@ -1698,21 +1855,223 @@ function EventFeedback({ eventId }: { eventId: string }) {
   );
 }
 
+function QrImage({ value }: { value: string }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    let alive = true;
+    void QRCode.toDataURL(value, {
+      width: 220,
+      margin: 1,
+      color: { dark: "#0b1b3a", light: "#ffffff" },
+    })
+      .then((url) => {
+        if (alive) setSrc(url);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [value]);
+  return src ? (
+    <img className="ticket-qr" src={src} alt="Ticket QR code" width={220} height={220} />
+  ) : (
+    <div className="ticket-qr ticket-qr-loading" aria-hidden="true" />
+  );
+}
+
 function EventsView({
   events,
   loadState,
+  identity,
+  tickets,
+  onRegister,
+  onCancel,
 }: {
   events: ApiEvent[];
   loadState: Loadable<ApiEvent[]>;
+  identity: DisplayIdentity;
+  tickets: Record<string, EventTicket>;
+  onRegister: (event: ApiEvent, form: { name: string; email: string; note: string }) => EventTicket;
+  onCancel: (eventId: string) => void;
 }) {
   const [period, setPeriod] = useState<"Upcoming" | "Past">("Upcoming");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [flow, setFlow] = useState<"detail" | "register" | "ticket">("detail");
+  const [regName, setRegName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regNote, setRegNote] = useState("");
+  const [copied, setCopied] = useState(false);
   const list = events.filter((event) =>
     period === "Past" ? event.status === "held" : event.status !== "held",
   );
   const selected = events.find((event) => event.id === selectedId) || null;
+
+  const openEvent = (id: string) => {
+    setSelectedId(id);
+    setFlow("detail");
+    setCopied(false);
+  };
+  const startRegister = () => {
+    setRegName(identity.displayName === "Member" ? "" : identity.displayName);
+    setRegEmail(identity.email && !identity.email.startsWith("guest@") ? identity.email : "");
+    setRegNote("");
+    setFlow("register");
+  };
+
   if (selected) {
     const held = selected.status === "held";
+    const ticket = tickets[selected.id] ?? null;
+
+    if (flow === "register") {
+      const canSubmit = regName.trim().length > 1 && /.+@.+\..+/.test(regEmail.trim());
+      return (
+        <div className="screen-stack animate-fade-in page-screen">
+          <button className="text-link back-link" type="button" onClick={() => setFlow("detail")}>
+            <ArrowLeft /> {selected.title || "Event"}
+          </button>
+          <PageTitle
+            kicker="Registration"
+            title="Reserve your spot"
+            subtitle={selected.title || "PAAIPE event"}
+          />
+          <div className="event-meta">
+            <span>
+              <CalendarDays />
+              {selected.date || "Date to be announced"}
+            </span>
+            {selected.startTime && (
+              <span>
+                <Clock3 />
+                {selected.startTime}
+                {selected.endTime ? ` – ${selected.endTime}` : ""}
+              </span>
+            )}
+          </div>
+          <form
+            className="profile-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!canSubmit) return;
+              onRegister(selected, { name: regName, email: regEmail, note: regNote });
+              setFlow("ticket");
+            }}
+          >
+            <label>
+              Full name
+              <input value={regName} onChange={(event) => setRegName(event.target.value)} placeholder="Your name" />
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={regEmail}
+                onChange={(event) => setRegEmail(event.target.value)}
+                placeholder="you@example.com"
+              />
+            </label>
+            <label>
+              Anything to share? (optional)
+              <textarea
+                value={regNote}
+                onChange={(event) => setRegNote(event.target.value)}
+                rows={3}
+                placeholder="Questions for the speaker, access needs, etc."
+              />
+            </label>
+            <button type="submit" disabled={!canSubmit}>
+              Confirm registration
+            </button>
+          </form>
+          <p className="feedback-note">
+            This creates a registration and ticket on this device and adds a confirmation to your
+            notifications. Sending your registration to the association is not connected in this
+            build.
+          </p>
+        </div>
+      );
+    }
+
+    if (flow === "ticket" && ticket) {
+      const copyCode = () => {
+        void navigator.clipboard?.writeText(ticket.code).then(
+          () => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1600);
+          },
+          () => {},
+        );
+      };
+      return (
+        <div className="screen-stack animate-fade-in page-screen">
+          <button className="text-link back-link" type="button" onClick={() => setFlow("detail")}>
+            <ArrowLeft /> {selected.title || "Event"}
+          </button>
+          <section className="ticket-card">
+            <div className="ticket-head">
+              <img src={logo} alt="PAAIPE" />
+              <span className="soft-chip ok">Registered</span>
+            </div>
+            <h2>{ticket.eventTitle}</h2>
+            <div className="ticket-meta">
+              <span>
+                <CalendarDays />
+                {ticket.eventDate}
+              </span>
+              {ticket.eventTime ? (
+                <span>
+                  <Clock3 />
+                  {ticket.eventTime}
+                </span>
+              ) : null}
+            </div>
+            <QrImage value={ticket.code} />
+            <p className="ticket-hint">Show this QR code at check-in.</p>
+            <dl className="ticket-details">
+              <div>
+                <dt>Attendee</dt>
+                <dd>{ticket.attendeeName}</dd>
+              </div>
+              <div>
+                <dt>Email</dt>
+                <dd>{ticket.attendeeEmail || "—"}</dd>
+              </div>
+              <div>
+                <dt>Ticket code</dt>
+                <dd className="ticket-code">{ticket.code}</dd>
+              </div>
+              <div>
+                <dt>Reference</dt>
+                <dd>{ticket.reference}</dd>
+              </div>
+            </dl>
+            <button type="button" className="ticket-copy" onClick={copyCode}>
+              {copied ? "Copied" : "Copy ticket code"}
+            </button>
+          </section>
+          <div className="settings-list">
+            <button
+              type="button"
+              onClick={() => {
+                onCancel(selected.id);
+                setFlow("detail");
+              }}
+            >
+              <X />
+              <span>
+                <strong>Cancel registration</strong>
+                <small>Remove this ticket from your device</small>
+              </span>
+              <ChevronRight />
+            </button>
+          </div>
+          <p className="feedback-note">
+            This is a preview pass generated on your device. Real check-in and the association's
+            registration system are not connected in this build.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="screen-stack animate-fade-in page-screen">
         <button className="text-link back-link" type="button" onClick={() => setSelectedId(null)}>
@@ -1735,20 +2094,49 @@ function EventsView({
               {selected.endTime ? ` – ${selected.endTime}` : ""}
             </span>
           )}
+          {selected.format ? <span className="soft-chip">{selected.format}</span> : null}
         </div>
+        {!held ? (
+          ticket ? (
+            <section className="register-cta registered">
+              <span className="soft-chip ok">You're registered</span>
+              <p>Your spot is saved. Your ticket has a QR code for check-in.</p>
+              <button type="button" className="register-button" onClick={() => setFlow("ticket")}>
+                View ticket
+              </button>
+            </section>
+          ) : (
+            <section className="register-cta">
+              <strong>Save your spot</strong>
+              <p>Register to get a ticket with a QR code and a confirmation in notifications.</p>
+              <button type="button" className="register-button" onClick={startRegister}>
+                Register
+              </button>
+            </section>
+          )
+        ) : null}
+        <h2 className="subheading">{held ? "After the session" : "What to expect"}</h2>
         <div className="program-list">
-          {[
-            ["Session recording", held ? "Members only · Watch in Learnings" : "Not published yet"],
-            ["Speaker's slides", "As presented, shared with the speaker's permission"],
-            ["Certificate", "After registration and feedback"],
-            ["Q&A follow-ups", "Questions the speaker answered after the session"],
-          ].map(([title, copy]) => (
+          {(held
+            ? [
+                ["Session recording", "Members only · Watch in Learnings"],
+                ["Speaker's slides", "As presented, shared with the speaker's permission"],
+                ["Certificate", "After registration and feedback"],
+                ["Q&A follow-ups", "Questions the speaker answered after the session"],
+              ]
+            : [
+                ["Live session", selected.startTime ? `Starts ${selected.startTime}` : "Time to be announced"],
+                ["Speaker", "Introduced at the start of the session"],
+                ["Q&A", "Ask questions live during the session"],
+                ["Certificate", "Issued after you attend and give feedback"],
+              ]
+          ).map(([title, copy]) => (
             <article className="program-card" key={title}>
               <div>
                 <strong>{title}</strong>
                 <p>{copy}</p>
               </div>
-              <span className="state">{held && title === "Session recording" ? "Watch" : "Not yet"}</span>
+              <span className="state">{held && title === "Session recording" ? "Watch" : "Info"}</span>
             </article>
           ))}
         </div>
@@ -1757,13 +2145,9 @@ function EventsView({
             <h2 className="subheading">Feedback</h2>
             <EventFeedback eventId={selected.id} />
           </>
-        ) : (
-          <div className="empty-note">
-            Feedback opens after the session for people who attended.
-          </div>
-        )}
+        ) : null}
         <div className="empty-note">
-          Join links, calendar files, and registration are not connected in this build.
+          Join links and calendar files are not connected in this build.
         </div>
       </div>
     );
@@ -1799,8 +2183,8 @@ function EventsView({
           <div className="empty-note">No {period.toLowerCase()} events right now.</div>
         ) : (
           list.map((event) => (
-            <article className="teresa-event-card" key={event.id} onClick={() => setSelectedId(event.id)} role="button" tabIndex={0} onKeyDown={(eventKey) => {
-              if (eventKey.key === "Enter") setSelectedId(event.id);
+            <article className="teresa-event-card" key={event.id} onClick={() => openEvent(event.id)} role="button" tabIndex={0} onKeyDown={(eventKey) => {
+              if (eventKey.key === "Enter") openEvent(event.id);
             }}>
               <div className="event-poster">
                 {event.coverUrl ? (
@@ -1830,7 +2214,13 @@ function EventsView({
                 )}
               </div>
               {(event.description || event.topic) && <p>{event.description || event.topic}</p>}
-              <div className="empty-note">Open this event for the recap, recording, slides, and certificate.</div>
+              {tickets[event.id] ? (
+                <div className="event-registered-tag">
+                  <span className="soft-chip ok">Registered</span>
+                </div>
+              ) : (
+                <div className="empty-note">Open this event to register and get your ticket.</div>
+              )}
             </article>
           ))
         )}
