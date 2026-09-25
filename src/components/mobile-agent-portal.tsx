@@ -1650,6 +1650,13 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
   const [commentDraft, setCommentDraft] = useState("");
   const [sharePost, setSharePost] = useState<FeedPost | null>(null);
   const [reel, setReel] = useState<FeedReel | null>(null);
+  const [composerActive, setComposerActive] = useState(false);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+
+  const autoGrow = (el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  };
 
   const publish = () => {
     const body = draft.trim();
@@ -1669,6 +1676,8 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
       ...current,
     ]);
     setDraft("");
+    setComposerActive(false);
+    if (draftRef.current) draftRef.current.style.height = "auto";
   };
 
   const toggleLike = (id: string) => {
@@ -1712,29 +1721,38 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
   };
 
   return (
-    <div className="screen-stack animate-fade-in page-screen">
-      <PageTitle
-        kicker="Members"
-        title="Feed"
-        subtitle="Posts, likes, and comments stay on this device until the feed is connected."
-      />
+    <div className="screen-stack animate-fade-in page-screen feed-screen">
       <form
-        className="feed-composer"
+        className={composerActive || draft ? "feed-composer is-active" : "feed-composer"}
         onSubmit={(event) => {
           event.preventDefault();
           publish();
         }}
       >
-        <div className="avatar">{initials}</div>
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Share something with members"
-          rows={3}
-        />
-        <button type="submit" disabled={!draft.trim()}>
-          Post
-        </button>
+        <div className="feed-composer-row">
+          <div className="avatar">{initials}</div>
+          <textarea
+            ref={draftRef}
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              autoGrow(event.target);
+            }}
+            onFocus={() => setComposerActive(true)}
+            onBlur={() => {
+              if (!draft.trim()) setComposerActive(false);
+            }}
+            placeholder="Share something with members"
+            rows={1}
+          />
+        </div>
+        {composerActive || draft ? (
+          <div className="feed-composer-actions">
+            <button type="submit" disabled={!draft.trim()}>
+              Post
+            </button>
+          </div>
+        ) : null}
       </form>
       <section className="reels-strip" aria-label="Reels">
         <div className="reels-head">

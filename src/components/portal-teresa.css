@@ -353,7 +353,27 @@
   font-size: 10px;
   font-weight: 600;
 }
-.portal-shell.teresa-inside .feed-composer,
+.portal-shell.teresa-inside .feed-composer {
+  display: grid;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--sw-line);
+  border-radius: 999px;
+  background: #fff;
+}
+.portal-shell.teresa-inside .feed-composer.is-active {
+  border-radius: 18px;
+  padding: 12px;
+}
+.portal-shell.teresa-inside .feed-composer-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.portal-shell.teresa-inside .feed-composer.is-active .feed-composer-row {
+  align-items: start;
+}
 .portal-shell.teresa-inside .feed-card {
   display: grid;
   gap: 10px;
@@ -362,34 +382,43 @@
   border-radius: 18px;
   background: #fff;
 }
-.portal-shell.teresa-inside .feed-composer {
-  grid-template-columns: auto 1fr;
-}
 .portal-shell.teresa-inside .feed-composer textarea,
 .portal-shell.teresa-inside .feed-comments input {
   width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 6px 4px;
+  font: inherit;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.4;
+}
+.portal-shell.teresa-inside .feed-comments input {
   border: 1px solid var(--sw-line);
   border-radius: 12px;
   padding: 10px 12px;
-  font: inherit;
-  resize: vertical;
 }
-.portal-shell.teresa-inside .feed-composer button,
+.portal-shell.teresa-inside .feed-composer textarea:focus {
+  outline: none;
+}
+.portal-shell.teresa-inside .feed-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--sw-line);
+  padding-top: 10px;
+}
+.portal-shell.teresa-inside .feed-composer-actions button,
 .portal-shell.teresa-inside .feed-comments button,
 .portal-shell.teresa-inside .feed-share button {
-  justify-self: end;
   min-height: 36px;
-  padding: 8px 14px;
+  padding: 8px 18px;
   border: 0;
   border-radius: 999px;
   background: var(--sw-blue);
   color: #fff;
   font-weight: 600;
 }
-.portal-shell.teresa-inside .feed-composer button {
-  grid-column: 2;
-}
-.portal-shell.teresa-inside .feed-composer button:disabled,
+.portal-shell.teresa-inside .feed-composer-actions button:disabled,
 .portal-shell.teresa-inside .feed-comments button:disabled {
   opacity: 0.45;
 }
