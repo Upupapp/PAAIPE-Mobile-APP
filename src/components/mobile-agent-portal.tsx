@@ -494,12 +494,7 @@ export function MobileAgentPortal() {
             />
           )}
           {active === "Learn" && (
-            <LearnView
-              sessions={sessions}
-              loadState={sessionData}
-              onOpen={openSession}
-              onResources={() => select("Resources")}
-            />
+            <LearnView sessions={sessions} loadState={sessionData} onOpen={openSession} />
           )}
           {active === "Events" && <EventsView events={events} loadState={eventData} />}
           {active === "Community" && (
@@ -1033,18 +1028,29 @@ function HomeView({
   );
 }
 
+const LEARNING_FILES = [
+  {
+    title: "From Signals to Strategy",
+    format: "Slides",
+    detail: "Gamma · Slide deck",
+    copy: "The September 2026 AI Exchange deck by Sven Bally — using AI to turn data into real insight. Shared with the speaker's permission.",
+    meta: "AI Exchange · Sept 15",
+  },
+] as const;
+
+const FILE_FORMATS = ["All formats", "Slides", "PDF", "Template", "Checklist", "Docs"] as const;
+
 function LearnView({
   sessions,
   loadState,
   onOpen,
-  onResources,
 }: {
   sessions: ApiSession[];
   loadState: Loadable<ApiSession[]>;
   onOpen: (session: ApiSession) => void;
-  onResources: () => void;
 }) {
-  const [lane, setLane] = useState<"Sessions" | "Micros" | "Playlists">("Sessions");
+  const [lane, setLane] = useState<"Sessions" | "Micros" | "Playlists" | "Resources">("Sessions");
+  const [fileFormat, setFileFormat] = useState<(typeof FILE_FORMATS)[number]>("All formats");
   const [library, setLibrary] = useState<"hub" | "recordings" | "slides">("hub");
   const [query, setQuery] = useState("");
   const [watched, setWatched] = useState<Record<string, boolean>>({});
@@ -1118,18 +1124,18 @@ function LearnView({
       <PageTitle
         kicker="Knowledge hub"
         title="Learnings"
-        subtitle="Sessions, micros, and playlists published for members."
+        subtitle="Sessions are longer horizontal recordings. Micros are short vertical videos. Playlists group them. Resources are the files."
       />
       <label className="search-field">
         <Search />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search sessions"
+          placeholder={lane === "Resources" ? "Search files" : "Search sessions"}
         />
       </label>
       <div className="filter-pills" aria-label="Learnings">
-        {(["Sessions", "Micros", "Playlists"] as const).map((label) => (
+        {(["Sessions", "Micros", "Playlists", "Resources"] as const).map((label) => (
           <button
             key={label}
             type="button"
@@ -1170,14 +1176,59 @@ function LearnView({
       {lane === "Micros" && (
         <div className="empty-note">
           <strong>No micros yet</strong>
-          <p>Short vertical clips appear here when published in Learnings. No placeholder reels.</p>
+          <p>Short vertical videos, like reels, appear here when they are published. No placeholder clips.</p>
         </div>
       )}
       {lane === "Playlists" && (
         <div className="empty-note">
           <strong>No playlists published yet</strong>
-          <p>Published playlists from the library will appear here.</p>
+          <p>A playlist is a combination of micros or sessions. Published playlists appear here.</p>
         </div>
+      )}
+      {lane === "Resources" && (
+        <>
+          <p className="copy-block">
+            PDFs, slides, templates, checklists, and other files. Recordings stay in Sessions and Micros.
+          </p>
+          <div className="filter-pills" aria-label="File format">
+            {FILE_FORMATS.map((label) => (
+              <button
+                key={label}
+                type="button"
+                className={fileFormat === label ? "selected" : ""}
+                aria-pressed={fileFormat === label}
+                onClick={() => setFileFormat(label)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {LEARNING_FILES.filter((file) => fileFormat === "All formats" || file.format === fileFormat).length ===
+          0 ? (
+            <div className="empty-note">
+              <strong>No files yet</strong>
+              <p>Nothing in this format yet. Choose another filter, or check back when a file is added.</p>
+            </div>
+          ) : (
+            LEARNING_FILES.filter(
+              (file) => fileFormat === "All formats" || file.format === fileFormat,
+            ).map((file) => (
+              <article className="program-card" key={file.title}>
+                <div>
+                  <span className="soft-chip">{file.format}</span>
+                  <strong>{file.title}</strong>
+                  <p>{file.copy}</p>
+                  <p>
+                    {file.meta} · {file.detail}
+                  </p>
+                </div>
+                <button className="state on" type="button" onClick={() => setLibrary("slides")}>
+                  Open
+                </button>
+              </article>
+            ))
+          )}
+        </>
       )}
       <div className="settings-list">
         <button type="button" onClick={() => setLibrary("recordings")}>
@@ -1188,19 +1239,11 @@ function LearnView({
           </span>
           <ChevronRight />
         </button>
-        <button type="button" onClick={() => setLibrary("slides")}>
-          <Presentation />
-          <span>
-            <strong>Speaker's slides</strong>
-            <small>Opens when a deck is shared</small>
-          </span>
-          <ChevronRight />
-        </button>
-        <button type="button" onClick={onResources}>
+        <button type="button" onClick={() => setLane("Resources")}>
           <FileText />
           <span>
             <strong>Resources</strong>
-            <small>Guides and references</small>
+            <small>PDFs, slides, and other files</small>
           </span>
           <ChevronRight />
         </button>
