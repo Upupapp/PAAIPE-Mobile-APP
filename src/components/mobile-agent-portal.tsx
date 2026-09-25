@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
   ArrowLeft,
   Award,
@@ -29,6 +29,7 @@ import {
   Presentation,
   Search,
   Share2,
+  Star,
   UserRound,
   UsersRound,
   X,
@@ -193,6 +194,75 @@ const PREVIEW_DIRECTORY: DirectoryMember[] = [
   { uid: "d-nina", name: "Nina Villanueva", initials: "NV", agentNumber: "0203", role: "AI researcher" },
 ];
 
+// Sample content shown only in preview so Home and Learnings are usable when the
+// live API is unreachable. Clearly marked as sample; not real scheduled events.
+const PREVIEW_EVENTS: ApiEvent[] = [
+  {
+    id: "prev-ev-upcoming",
+    title: "AI Exchange (sample)",
+    series: "AI Exchange",
+    format: "Webinar",
+    status: "scheduled",
+    date: "2nd Tuesday · monthly",
+    startTime: "8:00 PM PHT",
+    topic: "Sample topic — preview content",
+    description:
+      "Preview sample. Real Exchanges appear here when the association publishes them.",
+  },
+  {
+    id: "prev-ev-build-night",
+    title: "Build Night (sample)",
+    series: "Build Nights",
+    format: "Lab",
+    status: "scheduled",
+    date: "Dates announced per cohort",
+    topic: "Sample hands-on lab",
+    description: "Preview sample. Cohort dates and seats are set by the association.",
+  },
+  {
+    id: "prev-ev-recap",
+    title: "AI Exchange recap (sample)",
+    series: "AI Exchange",
+    format: "Webinar",
+    status: "held",
+    date: "Held · sample recap",
+    topic: "Sample recap",
+    description:
+      "Preview sample recap. The feedback form below is real, but sending to PAAIPE is not connected in this build.",
+  },
+];
+
+const PREVIEW_SESSIONS: ApiSession[] = [
+  {
+    id: "prev-s-signals",
+    title: "From Signals to Strategy (sample)",
+    description: "Preview sample recording.",
+    speaker: "Sample Speaker",
+    published: true,
+    displayOrder: 1,
+  },
+  {
+    id: "prev-s-prompting",
+    title: "Prompting foundations (sample)",
+    description: "Preview sample recording.",
+    speaker: "Sample Speaker",
+    published: true,
+    displayOrder: 2,
+  },
+  {
+    id: "prev-s-llms",
+    title: "Building with LLMs (sample)",
+    description: "Preview sample recording without a listed speaker.",
+    published: true,
+    displayOrder: 3,
+  },
+];
+
+const READY_RETRY = () => {};
+function readyLoadable<T>(data: T): Loadable<T> {
+  return { state: "ready", data, error: null, retry: READY_RETRY };
+}
+
 export function MobileAgentPortal() {
   const { ready, user, identity, profileState, profileSyncPending, signOut, refreshProfile } = useAuth();
   const [publicCard, setPublicCard] = useState<PublicCard | null>(() => readPublicCard());
@@ -200,10 +270,13 @@ export function MobileAgentPortal() {
   const [directoryOffset, setDirectoryOffset] = useState(0);
   const signedIn = Boolean(user && profileState === "ready" && identity?.status !== "suspended");
   const showPortal = signedIn || preview;
+  const usePreviewData = preview && !signedIn;
   const portalIdentity = identity ?? (preview ? PREVIEW_IDENTITY : null);
   const accountKey = signedIn ? user!.uid : null;
-  const eventData = useLoadable(showPortal ? "events" : null, getEvents);
-  const sessionData = useLoadable(showPortal ? "sessions" : null, getSessions);
+  const liveEventData = useLoadable(showPortal && !usePreviewData ? "events" : null, getEvents);
+  const liveSessionData = useLoadable(showPortal && !usePreviewData ? "sessions" : null, getSessions);
+  const eventData = usePreviewData ? readyLoadable(PREVIEW_EVENTS) : liveEventData;
+  const sessionData = usePreviewData ? readyLoadable(PREVIEW_SESSIONS) : liveSessionData;
   const directoryData = useLoadable(
     accountKey ? `${accountKey}:${directoryOffset}` : null,
     async () => getDirectory(await user!.getIdToken(), directoryOffset),
@@ -245,6 +318,7 @@ export function MobileAgentPortal() {
   };
   const [selectedSession, setSelectedSession] = useState<ApiSession | null>(null);
   const [selectedMember, setSelectedMember] = useState<DirectoryMember | null>(null);
+  const [feedPosts, setFeedPosts] = useState<FeedPost[]>(FEED_SEED);
   const [learnLane, setLearnLane] = useState<"Sessions" | "Micros" | "Playlists" | "Resources">("Sessions");
   const [active, setActive] = useState<View>("Home");
   const [activeBranch, setActiveBranch] = useState<Branch>("Home");
@@ -588,7 +662,13 @@ export function MobileAgentPortal() {
             <PublicProfileView identity={shownIdentity} card={publicCard} />
           )}
           {active === "Feed" && (
-            <FeedView author={displayName} initials={initials} photo={photo} />
+            <FeedView
+              author={displayName}
+              initials={initials}
+              photo={photo}
+              posts={feedPosts}
+              setPosts={setFeedPosts}
+            />
           )}
           {active === "MemberProfile" && (
             <MemberProfileView member={selectedMember} />
@@ -1527,6 +1607,97 @@ function LearnView({
   );
 }
 
+const EVENT_FEEDBACK_KEY = "paaipe-event-feedback";
+type EventFeedbackEntry = { rating: number; comment: string };
+function readEventFeedback(): Record<string, EventFeedbackEntry> {
+  try {
+    const raw = localStorage.getItem(EVENT_FEEDBACK_KEY);
+    if (!raw) return {};
+    const value = JSON.parse(raw) as unknown;
+    return value && typeof value === "object" ? (value as Record<string, EventFeedbackEntry>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function EventFeedback({ eventId }: { eventId: string }) {
+  const existing = readEventFeedback()[eventId] ?? null;
+  const [saved, setSaved] = useState<EventFeedbackEntry | null>(existing);
+  const [editing, setEditing] = useState(!existing);
+  const [rating, setRating] = useState(existing?.rating ?? 0);
+  const [comment, setComment] = useState(existing?.comment ?? "");
+
+  const submit = () => {
+    if (!rating) return;
+    const entry: EventFeedbackEntry = { rating, comment: comment.trim() };
+    const all = readEventFeedback();
+    all[eventId] = entry;
+    localStorage.setItem(EVENT_FEEDBACK_KEY, JSON.stringify(all));
+    setSaved(entry);
+    setEditing(false);
+  };
+
+  if (saved && !editing) {
+    return (
+      <section className="feedback-card">
+        <div className="feedback-head">
+          <strong>Your feedback</strong>
+          <button type="button" className="text-link" onClick={() => setEditing(true)}>
+            Edit
+          </button>
+        </div>
+        <div className="feedback-stars" aria-label={`You rated ${saved.rating} of 5`}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Star key={n} className={n <= saved.rating ? "on" : ""} fill={n <= saved.rating ? "currentColor" : "none"} />
+          ))}
+        </div>
+        {saved.comment ? <p className="feedback-comment">“{saved.comment}”</p> : null}
+        <p className="feedback-note">
+          Saved on this device. Sending feedback to PAAIPE is not connected in this build, so nothing
+          was submitted to the association.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="feedback-card">
+      <div className="feedback-head">
+        <strong>Share feedback</strong>
+      </div>
+      <div className="feedback-stars" role="radiogroup" aria-label="Rating">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={rating === n}
+            aria-label={`${n} star${n > 1 ? "s" : ""}`}
+            className={n <= rating ? "on" : ""}
+            onClick={() => setRating(n)}
+          >
+            <Star fill={n <= rating ? "currentColor" : "none"} />
+          </button>
+        ))}
+      </div>
+      <textarea
+        className="feedback-input"
+        value={comment}
+        onChange={(event) => setComment(event.target.value)}
+        rows={3}
+        placeholder="What worked? What could be better?"
+      />
+      <button type="button" className="feedback-save" disabled={!rating} onClick={submit}>
+        Save feedback
+      </button>
+      <p className="feedback-note">
+        Your rating and notes are kept on this device only. Sending feedback to PAAIPE is not
+        connected in this build yet — this does not submit anything to the association.
+      </p>
+    </section>
+  );
+}
+
 function EventsView({
   events,
   loadState,
@@ -1569,7 +1740,6 @@ function EventsView({
           {[
             ["Session recording", held ? "Members only · Watch in Learnings" : "Not published yet"],
             ["Speaker's slides", "As presented, shared with the speaker's permission"],
-            ["Feedback", "Opens after the session, for people who registered"],
             ["Certificate", "After registration and feedback"],
             ["Q&A follow-ups", "Questions the speaker answered after the session"],
           ].map(([title, copy]) => (
@@ -1582,6 +1752,16 @@ function EventsView({
             </article>
           ))}
         </div>
+        {held ? (
+          <>
+            <h2 className="subheading">Feedback</h2>
+            <EventFeedback eventId={selected.id} />
+          </>
+        ) : (
+          <div className="empty-note">
+            Feedback opens after the session for people who attended.
+          </div>
+        )}
         <div className="empty-note">
           Join links, calendar files, and registration are not connected in this build.
         </div>
@@ -1730,8 +1910,19 @@ const FEED_SEED: FeedPost[] = [
   },
 ];
 
-function FeedView({ author, initials, photo }: { author: string; initials: string; photo: string }) {
-  const [posts, setPosts] = useState<FeedPost[]>(FEED_SEED);
+function FeedView({
+  author,
+  initials,
+  photo,
+  posts,
+  setPosts,
+}: {
+  author: string;
+  initials: string;
+  photo: string;
+  posts: FeedPost[];
+  setPosts: Dispatch<SetStateAction<FeedPost[]>>;
+}) {
   const [draft, setDraft] = useState("");
   const [openComments, setOpenComments] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
@@ -2644,8 +2835,12 @@ function SessionView({
       <h2 className="subheading">Speaker</h2>
       <article className="program-card">
         <div>
-          <strong>Speaker</strong>
-          <p>The speaker name is shown when the published session includes one.</p>
+          <strong>{session?.speaker || "Speaker"}</strong>
+          <p>
+            {session?.speaker
+              ? "Speaker for this session."
+              : "The speaker name is shown when the published session includes one."}
+          </p>
         </div>
       </article>
       <h2 className="subheading">Chapters</h2>

@@ -1769,3 +1769,67 @@ html.is-native .portal-shell.teresa-inside .drawer-layer {
   font-weight: 600;
   padding: 6px 4px;
 }
+.portal-shell.teresa-inside .feedback-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--sw-line);
+  border-radius: 16px;
+  background: #fff;
+}
+.portal-shell.teresa-inside .feedback-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.portal-shell.teresa-inside .feedback-head strong {
+  font-size: 15px;
+}
+.portal-shell.teresa-inside .feedback-stars {
+  display: flex;
+  gap: 6px;
+}
+.portal-shell.teresa-inside .feedback-stars button {
+  border: 0;
+  background: transparent;
+  padding: 2px;
+  color: #c9d3e6;
+  cursor: pointer;
+}
+.portal-shell.teresa-inside .feedback-stars button.on,
+.portal-shell.teresa-inside .feedback-stars .on {
+  color: #f5a623;
+}
+.portal-shell.teresa-inside .feedback-stars svg {
+  width: 26px;
+  height: 26px;
+}
+.portal-shell.teresa-inside .feedback-input {
+  width: 100%;
+  border: 1px solid var(--sw-line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  resize: vertical;
+}
+.portal-shell.teresa-inside .feedback-save {
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sw-blue);
+  color: #fff;
+  font-weight: 600;
+}
+.portal-shell.teresa-inside .feedback-save:disabled {
+  opacity: 0.5;
+}
+.portal-shell.teresa-inside .feedback-comment {
+  margin: 0;
+  font-style: italic;
+  color: var(--sw-ink, #16233d);
+}
+.portal-shell.teresa-inside .feedback-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sw-muted, #64748b);
+}

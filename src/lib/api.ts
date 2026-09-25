@@ -203,6 +203,7 @@ export type ApiSession = {
   id: string;
   title?: string;
   description?: string;
+  speaker?: string;
   youtubeUrl?: string;
   youtubeId?: string;
   posterUrl?: string;
