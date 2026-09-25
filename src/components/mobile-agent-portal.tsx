@@ -52,6 +52,7 @@ import {
 import { tryPatchProfile } from "../lib/auth-context";
 import { type DisplayIdentity } from "../lib/profile-display";
 import { openExternalUrl } from "../lib/legal-links";
+import { canSubmitRegistration, submitEventRegistration } from "../lib/registrations";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
 import { DataState, MembershipPanel, ProfileGate } from "./membership-panel";
 import { AppHaptics } from "../lib/app-haptics";
@@ -183,6 +184,7 @@ export type EventTicket = {
   code: string;
   reference: string;
   createdAt: string;
+  synced: boolean;
 };
 
 export type AppNotification = {
@@ -609,10 +611,28 @@ export function MobileAgentPortal() {
     initials,
   };
   const photo = publicCard?.photo ?? "";
-  const registerForEvent = (
+  const registerForEvent = async (
     event: ApiEvent,
     form: { name: string; email: string; note: string },
-  ): EventTicket => {
+  ): Promise<EventTicket> => {
+    const attendeeName = form.name.trim() || shownIdentity.displayName;
+    const attendeeEmail = form.email.trim();
+    let reference = `REG-${Date.now().toString(36).toUpperCase()}`;
+    let synced = false;
+    // A real signed-in member's registration is written to the backend and keyed
+    // on the returned id. If that write fails we surface the error rather than
+    // minting a fake ticket. Preview/guest sessions keep an on-device pass.
+    if (signedIn && canSubmitRegistration()) {
+      reference = await submitEventRegistration({
+        eventId: event.id,
+        event: event.title || "PAAIPE event",
+        full_name: attendeeName,
+        email: attendeeEmail,
+        speaker_question: form.note,
+        updates: false,
+      });
+      synced = true;
+    }
     const ticket: EventTicket = {
       eventId: event.id,
       eventTitle: event.title || "PAAIPE event",
@@ -620,12 +640,13 @@ export function MobileAgentPortal() {
       eventTime: event.startTime
         ? `${event.startTime}${event.endTime ? ` – ${event.endTime}` : ""}`
         : "",
-      attendeeName: form.name.trim() || shownIdentity.displayName,
-      attendeeEmail: form.email.trim(),
+      attendeeName,
+      attendeeEmail,
       note: form.note.trim(),
       code: ticketCode(event.id),
-      reference: `REG-${Date.now().toString(36).toUpperCase()}`,
+      reference,
       createdAt: new Date().toISOString(),
+      synced,
     };
     setTickets((current) => {
       const next = { ...current, [event.id]: ticket };
@@ -635,7 +656,9 @@ export function MobileAgentPortal() {
     const note: AppNotification = {
       id: `n-${Date.now()}`,
       title: "You're registered",
-      body: `Your spot for ${ticket.eventTitle} is saved. Open Events to view your ticket and QR code.`,
+      body: synced
+        ? `Your spot for ${ticket.eventTitle} is confirmed with PAAIPE. Open Events to view your ticket and QR code.`
+        : `Your spot for ${ticket.eventTitle} is saved on this device. Open Events to view your ticket and QR code.`,
       at: Date.now(),
       read: false,
     };
@@ -1891,7 +1914,10 @@ function EventsView({
   loadState: Loadable<ApiEvent[]>;
   identity: DisplayIdentity;
   tickets: Record<string, EventTicket>;
-  onRegister: (event: ApiEvent, form: { name: string; email: string; note: string }) => EventTicket;
+  onRegister: (
+    event: ApiEvent,
+    form: { name: string; email: string; note: string },
+  ) => Promise<EventTicket>;
   onCancel: (eventId: string) => void;
 }) {
   const [period, setPeriod] = useState<"Upcoming" | "Past">("Upcoming");
@@ -1900,6 +1926,8 @@ function EventsView({
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regNote, setRegNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [regError, setRegError] = useState("");
   const [copied, setCopied] = useState(false);
   const list = events.filter((event) =>
     period === "Past" ? event.status === "held" : event.status !== "held",
@@ -1915,6 +1943,8 @@ function EventsView({
     setRegName(identity.displayName === "Member" ? "" : identity.displayName);
     setRegEmail(identity.email && !identity.email.startsWith("guest@") ? identity.email : "");
     setRegNote("");
+    setRegError("");
+    setSubmitting(false);
     setFlow("register");
   };
 
@@ -1951,9 +1981,21 @@ function EventsView({
             className="profile-form"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!canSubmit) return;
-              onRegister(selected, { name: regName, email: regEmail, note: regNote });
-              setFlow("ticket");
+              if (!canSubmit || submitting) return;
+              setSubmitting(true);
+              setRegError("");
+              void onRegister(selected, { name: regName, email: regEmail, note: regNote }).then(
+                () => {
+                  setSubmitting(false);
+                  setFlow("ticket");
+                },
+                () => {
+                  setSubmitting(false);
+                  setRegError(
+                    "Your registration could not be sent. Check your connection and try again — nothing was submitted.",
+                  );
+                },
+              );
             }}
           >
             <label>
@@ -1978,14 +2020,15 @@ function EventsView({
                 placeholder="Questions for the speaker, access needs, etc."
               />
             </label>
-            <button type="submit" disabled={!canSubmit}>
-              Confirm registration
+            {regError ? <p role="alert">{regError}</p> : null}
+            <button type="submit" disabled={!canSubmit || submitting}>
+              {submitting ? "Registering…" : "Confirm registration"}
             </button>
           </form>
           <p className="feedback-note">
-            This creates a registration and ticket on this device and adds a confirmation to your
-            notifications. Sending your registration to the association is not connected in this
-            build.
+            {canSubmitRegistration()
+              ? "Registering as a signed-in member sends your details to PAAIPE and creates your ticket. In preview it stays on this device."
+              : "This creates a registration and ticket on this device and adds a confirmation to your notifications. Sending your registration to the association is not connected in this build."}
           </p>
         </div>
       );
@@ -2024,7 +2067,7 @@ function EventsView({
                 </span>
               ) : null}
             </div>
-            <QrImage value={ticket.code} />
+            <QrImage value={ticket.reference} />
             <p className="ticket-hint">Show this QR code at check-in.</p>
             <dl className="ticket-details">
               <div>
@@ -2065,8 +2108,9 @@ function EventsView({
             </button>
           </div>
           <p className="feedback-note">
-            This is a preview pass generated on your device. Real check-in and the association's
-            registration system are not connected in this build.
+            {ticket.synced
+              ? "Your registration is confirmed with PAAIPE. Present this QR code at check-in."
+              : "This is a preview pass generated on your device. Real check-in and the association's registration system are not connected in this build."}
           </p>
         </div>
       );
