@@ -398,6 +398,135 @@
   align-items: center;
   gap: 10px;
 }
+.portal-shell.teresa-inside .feed-author {
+  display: grid;
+}
+.portal-shell.teresa-inside .feed-author small {
+  font-size: 11px;
+  color: var(--sw-muted);
+}
+.portal-shell.teresa-inside .feed-media {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--sw-line);
+  background: #000;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.portal-shell.teresa-inside .reels-strip {
+  display: grid;
+  gap: 8px;
+}
+.portal-shell.teresa-inside .reels-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.portal-shell.teresa-inside .reels-head small {
+  font-size: 11px;
+  color: var(--sw-muted);
+}
+.portal-shell.teresa-inside .reels-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.portal-shell.teresa-inside .reels-row::-webkit-scrollbar {
+  display: none;
+}
+.portal-shell.teresa-inside .reel-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 116px;
+  height: 190px;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #0b2458;
+  color: #fff;
+}
+.portal-shell.teresa-inside .reel-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.portal-shell.teresa-inside .reel-play {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+}
+.portal-shell.teresa-inside .reel-play svg {
+  width: 13px;
+  height: 13px;
+}
+.portal-shell.teresa-inside .reel-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  gap: 2px;
+  padding: 20px 10px 10px;
+  text-align: left;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.75));
+}
+.portal-shell.teresa-inside .reel-copy strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+.portal-shell.teresa-inside .reel-copy small {
+  font-size: 10px;
+  opacity: 0.85;
+}
+.portal-shell.teresa-inside .reel-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+}
+.portal-shell.teresa-inside .reel-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(4, 12, 30, 0.85);
+}
+.portal-shell.teresa-inside .reel-stage {
+  position: relative;
+  width: min(320px, 86vw);
+}
+.portal-shell.teresa-inside .reel-stage video {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 18px;
+  background: #000;
+  object-fit: cover;
+}
+.portal-shell.teresa-inside .reel-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+.portal-shell.teresa-inside .reel-meta {
+  display: grid;
+  gap: 2px;
+  padding: 10px 4px 0;
+  color: #fff;
+}
 .portal-shell.teresa-inside .feed-card p {
   margin: 0;
   font-size: 14px;

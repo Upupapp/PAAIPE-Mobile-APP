@@ -1559,34 +1559,87 @@ function EventsView({
 }
 
 type FeedComment = { id: string; author: string; body: string };
+type FeedMedia =
+  | { kind: "image"; src: string; alt: string }
+  | { kind: "video"; src: string; poster: string };
 type FeedPost = {
   id: string;
   author: string;
+  handle: string;
   initials: string;
+  time: string;
   body: string;
+  media?: FeedMedia;
   likes: number;
   liked: boolean;
   comments: FeedComment[];
 };
 
+type FeedReel = { id: string; title: string; author: string; src: string; poster: string };
+
+const FEED_REELS: FeedReel[] = [
+  {
+    id: "reel-members",
+    title: "Meet the members",
+    author: "PAAIPE",
+    src: "/feed/reel-members.mp4",
+    poster: "/feed/reel-members.jpg",
+  },
+  {
+    id: "reel-prompts",
+    title: "Prompt in 30s",
+    author: "Ava Cruz",
+    src: "/feed/reel-prompts.mp4",
+    poster: "/feed/reel-prompts.jpg",
+  },
+  {
+    id: "reel-agents",
+    title: "Why become an Agent",
+    author: "PAAIPE",
+    src: "/feed/reel-agents.mp4",
+    poster: "/feed/reel-agents.jpg",
+  },
+];
+
 const FEED_SEED: FeedPost[] = [
   {
-    id: "signals",
+    id: "exchange-recap",
     author: "PAAIPE",
+    handle: "@paaipe",
     initials: "PA",
-    body: "From Signals to Strategy is in Learnings, under Resources. Members can open the September AI Exchange deck there.",
-    likes: 4,
+    time: "2h",
+    body: "Recap reel from the September AI Exchange — From Signals to Strategy with Sven Bally. Full deck is in Learnings under Resources.",
+    media: { kind: "video", src: "/feed/exchange-recap.mp4", poster: "/feed/exchange-recap.jpg" },
+    likes: 24,
+    liked: false,
+    comments: [
+      { id: "c-recap-1", author: "Ava Cruz", body: "The data-to-decision framing was gold." },
+    ],
+  },
+  {
+    id: "welcome-agents",
+    author: "PAAIPE",
+    handle: "@paaipe",
+    initials: "PA",
+    time: "5h",
+    body: "Welcome to the newest confirmed Agents this week. Say hello in the comments and add yourself to the directory from Profile.",
+    media: { kind: "image", src: "/banners/home/home-banner@2x.png", alt: "PAAIPE members" },
+    likes: 31,
     liked: false,
     comments: [],
   },
   {
-    id: "circles",
-    author: "PAAIPE",
-    initials: "PA",
-    body: "Regional Circles are listed under Profile, then Programs. Interest lists open when a circle is ready.",
-    likes: 2,
+    id: "next-exchange",
+    author: "Maria Santos",
+    handle: "@maria",
+    initials: "MS",
+    time: "1d",
+    body: "Prepping my questions for the next Exchange. What would you ask a founder shipping AI in the Philippines? 🇵🇭",
+    likes: 12,
     liked: false,
-    comments: [],
+    comments: [
+      { id: "c-next-1", author: "PAAIPE", body: "Great thread — drop them here and we'll pass the best ones on." },
+    ],
   },
 ];
 
@@ -1596,6 +1649,7 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
   const [openComments, setOpenComments] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [sharePost, setSharePost] = useState<FeedPost | null>(null);
+  const [reel, setReel] = useState<FeedReel | null>(null);
 
   const publish = () => {
     const body = draft.trim();
@@ -1604,7 +1658,9 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
       {
         id: `local-${Date.now()}`,
         author,
+        handle: "@you",
         initials,
+        time: "now",
         body,
         likes: 0,
         liked: false,
@@ -1680,13 +1736,57 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
           Post
         </button>
       </form>
+      <section className="reels-strip" aria-label="Reels">
+        <div className="reels-head">
+          <strong>Reels</strong>
+          <small>Short vertical clips</small>
+        </div>
+        <div className="reels-row">
+          {FEED_REELS.map((item) => (
+            <button
+              type="button"
+              className="reel-thumb"
+              key={item.id}
+              onClick={() => setReel(item)}
+            >
+              <img src={item.poster} alt="" />
+              <span className="reel-play">
+                <Play fill="currentColor" />
+              </span>
+              <span className="reel-copy">
+                <strong>{item.title}</strong>
+                <small>{item.author}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
       {posts.map((post) => (
         <article className="feed-card" key={post.id}>
           <header>
             <div className="avatar">{post.initials}</div>
-            <strong>{post.author}</strong>
+            <span className="feed-author">
+              <strong>{post.author}</strong>
+              <small>
+                {post.handle} · {post.time}
+              </small>
+            </span>
           </header>
           <p>{post.body}</p>
+          {post.media ? (
+            post.media.kind === "image" ? (
+              <img className="feed-media" src={post.media.src} alt={post.media.alt} />
+            ) : (
+              <video
+                className="feed-media"
+                src={post.media.src}
+                poster={post.media.poster}
+                controls
+                playsInline
+                preload="none"
+              />
+            )
+          ) : null}
           <div className="feed-actions">
             <button
               type="button"
@@ -1756,6 +1856,21 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
               <button type="button" onClick={() => share("facebook")}>Facebook</button>
               <button type="button" onClick={() => share("linkedin")}>LinkedIn</button>
               <button type="button" onClick={() => share("x")}>X</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {reel ? (
+        <div className="reel-viewer" role="dialog" aria-modal="true" aria-label={reel.title}>
+          <button className="reel-backdrop" type="button" aria-label="Close reel" onClick={() => setReel(null)} />
+          <div className="reel-stage">
+            <button className="reel-close icon-button" type="button" aria-label="Close" onClick={() => setReel(null)}>
+              <X />
+            </button>
+            <video src={reel.src} poster={reel.poster} controls autoPlay playsInline />
+            <div className="reel-meta">
+              <strong>{reel.title}</strong>
+              <small>{reel.author}</small>
             </div>
           </div>
         </div>
