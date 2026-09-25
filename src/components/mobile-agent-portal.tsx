@@ -722,7 +722,7 @@ export function MobileAgentPortal() {
               aria-label="Open menu"
               onClick={() => setMenuOpen(true)}
             >
-              {initials}
+              {photo ? <img src={photo} alt="" /> : initials}
             </button>
           ) : (
             <button
@@ -780,9 +780,9 @@ export function MobileAgentPortal() {
               eventData={eventData}
               onExplore={() => selectBranch("Learn")}
               onEvent={() => selectBranch("Events")}
-              onBenefits={() => select("Benefits")}
+              onBenefits={() => select("Benefits", { fromSheet: true })}
               onProfile={() => select("Profile")}
-              onPrograms={() => select("Programs")}
+              onPrograms={() => select("Programs", { fromSheet: true })}
               onSession={openSession}
             />
           )}
@@ -809,6 +809,7 @@ export function MobileAgentPortal() {
             <ProfileView
               identity={shownIdentity}
               go={select}
+              photo={photo}
               onEdit={() => select("EditProfile")}
               onPreview={() => select("PublicProfile")}
             />
@@ -969,7 +970,7 @@ export function MobileAgentPortal() {
                 </button>
                 <div className="drawer-sheet" />
                 <div className="drawer-identity">
-                  <div className="avatar xl">{initials}</div>
+                  <div className="avatar xl">{photo ? <img src={photo} alt="" /> : initials}</div>
                   <strong>{displayName}</strong>
                   <MembershipPill identity={portalIdentity} />
                   {agentNumber ? (
@@ -1217,10 +1218,13 @@ function HomeView({
           </span>
           <ChevronRight />
         </button>
-        <button type="button" onClick={onExplore}>
+        <button
+          type="button"
+          onClick={() => (continueSession ? onSession(continueSession) : onExplore())}
+        >
           <Play />
           <span>
-            <strong>Open Learnings</strong>
+            <strong>{continueSession ? "Continue watching" : "Open Learnings"}</strong>
             <small>
               {continueSession
                 ? continueSession.title || "Published sessions"
@@ -2677,11 +2681,13 @@ function MembershipPill({ identity }: { identity: DisplayIdentity }) {
 function ProfileView({
   identity,
   go,
+  photo,
   onEdit,
   onPreview,
 }: {
   identity: DisplayIdentity;
   go: (view: View) => void;
+  photo: string;
   onEdit: () => void;
   onPreview: () => void;
 }) {
@@ -2689,7 +2695,7 @@ function ProfileView({
     <div className="screen-stack animate-fade-in page-screen profile-screen">
       <section className="profile-hero">
         <button className="avatar profile-avatar" type="button" onClick={onPreview} aria-label="Preview public profile">
-          {identity.initials}
+          {photo ? <img src={photo} alt="" /> : identity.initials}
         </button>
         <h1>{identity.displayName}</h1>
         <MembershipPill identity={identity} />
