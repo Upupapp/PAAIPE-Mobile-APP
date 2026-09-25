@@ -1138,7 +1138,7 @@ function HomeView({
       copy: continueSession.speaker
         ? `${continueSession.title || "Latest session"} — with ${continueSession.speaker}`
         : continueSession.title || "Latest session published",
-      when: "Learnings",
+      when: "Session",
     });
   }
   news.push({
