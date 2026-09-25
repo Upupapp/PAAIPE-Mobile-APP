@@ -606,6 +606,149 @@
   padding: 10px 4px 0;
   color: #fff;
 }
+.portal-shell.teresa-inside .reels-feed {
+  height: calc(100dvh - 250px);
+  min-height: 420px;
+  margin: 4px -4px 0;
+  border-radius: 18px;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  background: #05060a;
+  scrollbar-width: none;
+}
+.portal-shell.teresa-inside .reels-feed::-webkit-scrollbar {
+  display: none;
+}
+.portal-shell.teresa-inside .reels-page {
+  position: relative;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.portal-shell.teresa-inside .reels-page video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+  display: block;
+}
+.portal-shell.teresa-inside .reels-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  gap: 4px;
+  padding: 40px 16px 18px;
+  color: #fff;
+  background: linear-gradient(180deg, transparent, rgba(4, 6, 12, 0.82));
+}
+.portal-shell.teresa-inside .reels-overlay strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+.portal-shell.teresa-inside .reels-overlay small {
+  font-size: 13px;
+  opacity: 0.82;
+}
+.portal-shell.teresa-inside .reels-overlay p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.92;
+}
+.portal-shell.teresa-inside .soft-hero {
+  display: grid;
+  gap: 12px;
+  padding: 28px 20px;
+  border: 1px solid var(--sw-line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fff, #eef4fd);
+  text-align: center;
+}
+.portal-shell.teresa-inside .soft-hero h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0b2458;
+}
+.portal-shell.teresa-inside .soft-hero p {
+  margin: 0 auto;
+  max-width: 42ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--sw-muted);
+}
+.portal-shell.teresa-inside .programs-hero {
+  text-align: left;
+}
+.portal-shell.teresa-inside .programs-hero h2 span {
+  color: #1e6fe8;
+}
+.portal-shell.teresa-inside .journey-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.portal-shell.teresa-inside .journey-row::-webkit-scrollbar {
+  display: none;
+}
+.portal-shell.teresa-inside .journey-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 6px 12px 6px 8px;
+  border: 1px solid var(--sw-line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0b2458;
+}
+.portal-shell.teresa-inside .journey-step b {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #f6db74, #f2a71b);
+  color: #0b2458;
+  font-size: 10px;
+}
+.portal-shell.teresa-inside .soft-chip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--sw-line);
+  color: var(--sw-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.portal-shell.teresa-inside .soft-chip.soon {
+  background: #fdf1dd;
+  color: #7a4a06;
+}
+.portal-shell.teresa-inside .soft-chip.ok {
+  background: #e3f6ec;
+  color: #0a5c3a;
+}
+.portal-shell.teresa-inside .program-detail {
+  color: var(--sw-muted);
+  font-size: 12px;
+}
+.portal-shell.teresa-inside .program-tagline {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0b2458;
+}
 .portal-shell.teresa-inside .feed-card p {
   margin: 0;
   font-size: 14px;

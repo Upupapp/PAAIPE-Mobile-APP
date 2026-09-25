@@ -53,16 +53,6 @@ import { openExternalUrl } from "../lib/legal-links";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
 import { DataState, MembershipPanel, ProfileGate } from "./membership-panel";
 import { AppHaptics } from "../lib/app-haptics";
-import {
-  BENEFITS_INTRO,
-  MEMBER_BENEFITS,
-  PARTNER_BENEFIT_DISCLAIMER,
-  PROGRAM_NOTES,
-  PROGRAMS,
-  RESOURCE_FILM,
-  RESOURCE_FORMATS,
-  RESOURCE_PREVIEWS,
-} from "../lib/website-content";
 
 /** Four router branches. The center button opens the member feed. */
 type Branch = "Home" | "Learn" | "Events" | "Profile";
@@ -633,7 +623,7 @@ export function MobileAgentPortal() {
           {active === "Organization" && <OrganizationView />}
           {active === "Certificates" && <CertificatesView />}
           {active === "Programs" && (
-            <ProgramsView onEvents={() => selectBranch("Events")} onResources={() => openLearn("Resources")} />
+            <ProgramsView onEvents={() => selectBranch("Events")} />
           )}
           {active === "Session" && (
             <SessionView
@@ -1175,6 +1165,80 @@ function VisualCard({
   );
 }
 
+type FeedReel = { id: string; title: string; author: string; caption: string; src: string; poster: string };
+
+const FEED_REELS: FeedReel[] = [
+  {
+    id: "reel-members",
+    title: "Meet the members",
+    author: "PAAIPE",
+    caption: "New Agents joined this month. Add yourself to the directory from Profile.",
+    src: "/feed/reel-members.mp4",
+    poster: "/feed/reel-members.jpg",
+  },
+  {
+    id: "reel-prompts",
+    title: "Prompt in 30s",
+    author: "Ava Cruz",
+    caption: "A quick prompting tip you can use today. Save it for your next build.",
+    src: "/feed/reel-prompts.mp4",
+    poster: "/feed/reel-prompts.jpg",
+  },
+  {
+    id: "reel-agents",
+    title: "Why become an Agent",
+    author: "PAAIPE",
+    caption: "What confirmed Agents get in the PAAIPE community.",
+    src: "/feed/reel-agents.mp4",
+    poster: "/feed/reel-agents.jpg",
+  },
+];
+
+function MicrosReels() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    const videos = Array.from(root.querySelectorAll<HTMLVideoElement>("video"));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const video = entry.target as HTMLVideoElement;
+          if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
+            void video.play().catch(() => {});
+          } else {
+            video.pause();
+          }
+        }
+      },
+      { root, threshold: [0, 0.6, 1] },
+    );
+    for (const video of videos) observer.observe(video);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div className="reels-feed" ref={containerRef}>
+      {FEED_REELS.map((reel) => (
+        <section className="reels-page" key={reel.id}>
+          <video
+            src={reel.src}
+            poster={reel.poster}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+          />
+          <div className="reels-overlay">
+            <strong>{reel.title}</strong>
+            <small>{reel.author}</small>
+            <p>{reel.caption}</p>
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function LearnView({
   sessions,
   loadState,
@@ -1332,16 +1396,7 @@ function LearnView({
           )}
         </DataState>
       )}
-      {lane === "Micros" && (
-        <div className="visual-grid">
-          <VisualCard
-            kind="Micro"
-            title="No micros yet"
-            description="Short vertical videos appear here when they are published."
-            meta="Vertical · short"
-          />
-        </div>
-      )}
+      {lane === "Micros" && <MicrosReels />}
       {lane === "Playlists" && (
         <div className="visual-grid">
           <VisualCard
@@ -1613,32 +1668,6 @@ type FeedPost = {
   liked: boolean;
   comments: FeedComment[];
 };
-
-type FeedReel = { id: string; title: string; author: string; src: string; poster: string };
-
-const FEED_REELS: FeedReel[] = [
-  {
-    id: "reel-members",
-    title: "Meet the members",
-    author: "PAAIPE",
-    src: "/feed/reel-members.mp4",
-    poster: "/feed/reel-members.jpg",
-  },
-  {
-    id: "reel-prompts",
-    title: "Prompt in 30s",
-    author: "Ava Cruz",
-    src: "/feed/reel-prompts.mp4",
-    poster: "/feed/reel-prompts.jpg",
-  },
-  {
-    id: "reel-agents",
-    title: "Why become an Agent",
-    author: "PAAIPE",
-    src: "/feed/reel-agents.mp4",
-    poster: "/feed/reel-agents.jpg",
-  },
-];
 
 const FEED_SEED: FeedPost[] = [
   {
@@ -2349,21 +2378,17 @@ function BenefitsView() {
     <div className="screen-stack page-screen">
       <PageTitle
         kicker="Membership"
-        title="Member benefits"
-        subtitle="Benefits designed to help members learn, build and connect."
+        title="Benefits"
+        subtitle="Exclusive benefits for PAAIPE Agents"
       />
-      <p className="copy-block">{BENEFITS_INTRO}</p>
-      <div className="program-list">
-        {MEMBER_BENEFITS.map((benefit) => (
-          <article className="program-card" key={benefit.name}>
-            <div>
-              <strong>{benefit.name}</strong>
-              <p>{benefit.description}</p>
-              {benefit.partner ? <p className="partner-disclaimer">{PARTNER_BENEFIT_DISCLAIMER}</p> : null}
-            </div>
-          </article>
-        ))}
-      </div>
+      <section className="soft-hero">
+        <span className="soft-chip soon">Coming soon</span>
+        <h2>Exclusive benefits for PAAIPE Agents</h2>
+        <p>
+          Partner perks and member-only offers will show up here when they are ready. Nothing to
+          claim yet — check back soon.
+        </p>
+      </section>
     </div>
   );
 }
@@ -2371,144 +2396,146 @@ function OrganizationView() {
   return (
     <div className="screen-stack page-screen">
       <PageTitle
-        kicker="Your organizations"
-        title="Organization"
-        subtitle="Manage the organizations you represent."
+        kicker="You"
+        title="My Organization"
+        subtitle="The company you speak for when you apply as a Partner"
       />
+      <section className="soft-hero">
+        <span className="soft-chip">No organization yet</span>
+        <h2>Add the company you represent</h2>
+        <p>
+          Link an organization when you apply as a Partner. Your organization details and Partner
+          application live in the PAAIPE portal; nothing is added to your account until you submit
+          one.
+        </p>
+      </section>
       <div className="empty-note">
-        Organization management is not connected in this mobile version. This screen does not
-        indicate whether your account has organizations.
+        Adding and editing an organization is not connected in this build. This screen does not mean
+        your account has no organization.
       </div>
-      <button
-        className="portal-link"
-        onClick={() => void openExternalUrl("https://paaipe.org/portal-organization.html")}
-      >
-        Open My Organizations on the web
-      </button>
     </div>
   );
 }
 function CertificatesView() {
+  const [query, setQuery] = useState("");
   return (
     <div className="screen-stack page-screen">
       <PageTitle
-        kicker="Credentials"
-        title="My certificates"
-        subtitle="Certificates issued for your participation."
+        kicker="You"
+        title="My Certificates"
+        subtitle="Certificates of Participation you've earned from PAAIPE events"
       />
+      <label className="search-field">
+        <Search />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by event name"
+        />
+      </label>
       <div className="empty-note">
-        Your certificate library is not connected in this mobile version. Open the web portal to
-        check issued certificates.
+        <strong>No certificates yet</strong>
+        <p>
+          A Certificate of Participation is issued after you attend a PAAIPE event. Once you have
+          one, it appears here to view and download.
+        </p>
       </div>
-      <button
-        className="portal-link"
-        onClick={() => void openExternalUrl("https://paaipe.org/portal-my-certificates.html")}
-      >
-        Open My Certificates on the web
-      </button>
     </div>
   );
 }
-function ResourcesView() {
-  const [format, setFormat] = useState<(typeof RESOURCE_FORMATS)[number]>("All formats");
-  const previews = RESOURCE_PREVIEWS.filter((item) => format === "All formats" || item.format === format);
-  const showFilm = format === "All formats" || format === "Video";
+const PORTAL_PROGRAMS = [
+  {
+    name: "AI Exchange",
+    copy: "Monthly webinar series · every 2nd Tuesday, 8:00 PM PHT",
+    status: "Registered for the next Exchange",
+    tone: "ok" as const,
+    action: "Events" as const,
+  },
+  {
+    name: "AI Safari",
+    copy: "Field trips to AI companies and showcases · seasonal, small groups",
+    status: "In development",
+    tone: "soon" as const,
+    detail: "Interest list · seats offered to confirmed Agents first",
+  },
+  {
+    name: "Build Nights",
+    copy: "Hands-on labs of 10–20 members · periodic",
+    status: "In development",
+    tone: "soon" as const,
+    detail: "First cohort · seats open soon",
+  },
+  {
+    name: "Certification Pathways",
+    copy: "Cohort courses with TESDA/DICT-recognized trainers · scheduled intakes",
+    status: "In development",
+    tone: "soon" as const,
+  },
+  {
+    name: "Member Spotlight",
+    copy: "Profiles and case studies of members' AI work · monthly",
+    status: "In development",
+    tone: "soon" as const,
+  },
+  {
+    name: "Regional Circles",
+    copy: "Local meetups led by Agents · quarterly per circle",
+    status: "In development",
+    tone: "soon" as const,
+  },
+  {
+    name: "Mentorship",
+    copy: "1:1 and small-group · 3-month cycles",
+    status: "In development",
+    tone: "soon" as const,
+  },
+] as const;
+
+function ProgramsView({ onEvents }: { onEvents: () => void }) {
   return (
     <div className="screen-stack page-screen">
       <PageTitle
-        kicker="Member materials"
-        title="Resources"
-        subtitle="PDFs, videos and templates — every resource says up front what it is and how to get it."
-      />
-      <div className="filter-pills" aria-label="Filter by format">
-        {RESOURCE_FORMATS.map((label) => (
-          <button
-            key={label}
-            type="button"
-            className={format === label ? "selected" : ""}
-            aria-pressed={format === label}
-            onClick={() => setFormat(label)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {showFilm ? (
-        <article className="program-card">
-          <div>
-            <span className="soft-chip">{RESOURCE_FILM.format}</span>
-            <strong>{RESOURCE_FILM.title}</strong>
-            <p>{RESOURCE_FILM.description}</p>
-            <p>
-              {RESOURCE_FILM.medium} · {RESOURCE_FILM.detail}
-            </p>
-            <button
-              className="portal-link"
-              type="button"
-              onClick={() => void openExternalUrl(RESOURCE_FILM.href)}
-            >
-              {RESOURCE_FILM.actionLabel} on {RESOURCE_FILM.host}
-            </button>
-          </div>
-        </article>
-      ) : null}
-      {previews.length === 0 && !showFilm ? (
-        <div className="empty-note">No resources in this format yet.</div>
-      ) : (
-        <div className="program-list">
-          {previews.map((item) => (
-            <article className="program-card" key={item.title}>
-              <div>
-                <span className="soft-chip">{item.status}</span>
-                <strong>{item.title}</strong>
-                <p>{item.description}</p>
-                <p>
-                  {item.format} · {item.medium} · {item.topic}
-                </p>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-function ProgramsView({ onEvents, onResources }: { onEvents: () => void; onResources: () => void }) {
-  return (
-    <div className="screen-stack page-screen">
-      <PageTitle
-        kicker="Program roadmap"
+        kicker="An AI-powered Philippines"
         title="Programs"
-        subtitle="Public learning and members-only programs published by PAAIPE."
+        subtitle="Enrol, join waitlists and pick your circle"
       />
+      <section className="soft-hero programs-hero">
+        <h2>
+          Your path in <span>Philippine AI</span>
+        </h2>
+        <div className="journey-row">
+          {["Discover", "Learn", "Engage", "Build", "Certify", "Connect", "Contribute"].map(
+            (step, index) => (
+              <span className="journey-step" key={step}>
+                <b>{index + 1}</b>
+                {step}
+              </span>
+            ),
+          )}
+        </div>
+      </section>
       <div className="program-list">
-        {PROGRAMS.map((program) => (
-          <article className="program-card" key={program.slug}>
+        {PORTAL_PROGRAMS.map((program) => (
+          <article className="program-card" key={program.name}>
             <div>
-              <strong>{program.title}</strong>
+              <span className={`soft-chip ${program.tone}`}>{program.status}</span>
+              <strong>{program.name}</strong>
               <p>{program.copy}</p>
+              {"detail" in program && program.detail ? (
+                <p className="program-detail">{program.detail}</p>
+              ) : null}
             </div>
-            {"opensEvents" in program && program.opensEvents ? (
+            {"action" in program && program.action === "Events" ? (
               <button className="state on" type="button" onClick={onEvents}>
                 Events
               </button>
-            ) : "opensResources" in program && program.opensResources ? (
-              <button className="state on" type="button" onClick={onResources}>
-                Resources
-              </button>
-            ) : (
-              <span className={`state ${program.visibility === "public" ? "public" : ""}`}>
-                {program.visibility === "public" ? "Public" : "Members only"}
-              </span>
-            )}
+            ) : null}
           </article>
         ))}
       </div>
-      {PROGRAM_NOTES.map((note) => (
-        <div className="empty-note" key={note}>
-          {note}
-        </div>
-      ))}
+      <p className="program-tagline">
+        Building the Philippines' AI-Powered Future — Together
+      </p>
     </div>
   );
 }
