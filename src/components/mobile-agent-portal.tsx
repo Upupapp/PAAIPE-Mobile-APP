@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   Award,
@@ -197,6 +197,7 @@ export function MobileAgentPortal() {
     }
   };
   const [selectedSession, setSelectedSession] = useState<ApiSession | null>(null);
+  const [learnLane, setLearnLane] = useState<"Sessions" | "Micros" | "Playlists" | "Resources">("Sessions");
   const [active, setActive] = useState<View>("Home");
   const [activeBranch, setActiveBranch] = useState<Branch>("Home");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -261,8 +262,18 @@ export function MobileAgentPortal() {
     AppHaptics.medium();
   };
 
+  const openLearn = (lane: "Sessions" | "Micros" | "Playlists" | "Resources") => {
+    setLearnLane(lane);
+    select("Learn");
+  };
+
   const openFromSheet = (view: View) => {
     AppHaptics.selection();
+    if (view === "Resources") {
+      setLearnLane("Resources");
+      select("Learn", { fromSheet: true });
+      return;
+    }
     select(view, { fromSheet: true });
   };
 
@@ -497,7 +508,13 @@ export function MobileAgentPortal() {
             />
           )}
           {active === "Learn" && (
-            <LearnView sessions={sessions} loadState={sessionData} onOpen={openSession} />
+            <LearnView
+              sessions={sessions}
+              loadState={sessionData}
+              lane={learnLane}
+              onLane={setLearnLane}
+              onOpen={openSession}
+            />
           )}
           {active === "Events" && <EventsView events={events} loadState={eventData} />}
           {active === "Community" && (
@@ -534,14 +551,13 @@ export function MobileAgentPortal() {
           {active === "Benefits" && <BenefitsView />}
           {active === "Organization" && <OrganizationView />}
           {active === "Certificates" && <CertificatesView />}
-          {active === "Resources" && <ResourcesView />}
           {active === "Programs" && (
-            <ProgramsView onEvents={() => selectBranch("Events")} onResources={() => select("Resources")} />
+            <ProgramsView onEvents={() => selectBranch("Events")} onResources={() => openLearn("Resources")} />
           )}
           {active === "Session" && (
             <SessionView
               session={selectedSession}
-              onResources={() => select("Resources")}
+              onResources={() => openLearn("Resources")}
               onEvents={() => selectBranch("Events")}
             />
           )}
@@ -647,7 +663,11 @@ export function MobileAgentPortal() {
                 <div className="drawer-divider" />
                 <p className="drawer-label">General</p>
                 {generalMenu.map(({ label, view, icon: Icon }) => (
-                  <button className="drawer-link" key={label} onClick={() => select(view)}>
+                  <button
+                    className="drawer-link"
+                    key={label}
+                    onClick={() => (view === "Resources" ? openLearn("Resources") : select(view))}
+                  >
                     <Icon />
                     <span>{label}</span>
                     <ChevronRight />
@@ -1050,21 +1070,130 @@ const FILE_FORMATS = [
   { label: "Docs", hint: "Notes", icon: Files },
 ] as const;
 
+function BannerArt({ kind }: { kind: string }) {
+  const tone = kind.toLowerCase();
+  if (tone === "slides") {
+    return (
+      <span className="scene scene-slides" aria-hidden="true">
+        <span className="paper">
+          <i /><i /><i />
+        </span>
+      </span>
+    );
+  }
+  if (tone === "pdf" || tone === "docs") {
+    return (
+      <span className="scene scene-page" aria-hidden="true">
+        <span className="paper">
+          <i /><i /><i /><i />
+        </span>
+      </span>
+    );
+  }
+  if (tone === "template") {
+    return (
+      <span className="scene scene-template" aria-hidden="true">
+        <span className="paper">
+          <i /><i /><i /><i />
+        </span>
+      </span>
+    );
+  }
+  if (tone === "checklist") {
+    return (
+      <span className="scene scene-checks" aria-hidden="true">
+        <span className="paper">
+          <i /><i /><i />
+        </span>
+      </span>
+    );
+  }
+  if (tone === "micro") {
+    return (
+      <span className="scene scene-micro" aria-hidden="true">
+        <span className="phone"><Play /></span>
+      </span>
+    );
+  }
+  if (tone === "playlist") {
+    return (
+      <span className="scene scene-playlist" aria-hidden="true">
+        <span /><span /><span />
+      </span>
+    );
+  }
+  return (
+    <span className="scene scene-session" aria-hidden="true">
+      <span className="wide"><Play /></span>
+    </span>
+  );
+}
+
+function VisualCard({
+  kind,
+  title,
+  description,
+  meta,
+  image,
+  onClick,
+  extra,
+}: {
+  kind: string;
+  title: string;
+  description: string;
+  meta?: string;
+  image?: string | undefined;
+  onClick?: () => void;
+  extra?: ReactNode;
+}) {
+  const face = (
+    <>
+      <span className={`visual-banner tone-${kind.toLowerCase()}`}>
+        {image ? <img src={image} alt="" /> : <BannerArt kind={kind} />}
+      </span>
+      <span className="visual-copy">
+        <small>{kind}</small>
+        <strong>{title}</strong>
+        <em>{description}</em>
+        {meta ? <span className="visual-meta">{meta}</span> : null}
+      </span>
+    </>
+  );
+  return (
+    <article className="visual-card">
+      {onClick ? (
+        <button className="visual-open" type="button" onClick={onClick}>
+          {face}
+        </button>
+      ) : (
+        face
+      )}
+      {extra}
+    </article>
+  );
+}
+
 function LearnView({
   sessions,
   loadState,
+  lane,
+  onLane,
   onOpen,
 }: {
   sessions: ApiSession[];
   loadState: Loadable<ApiSession[]>;
+  lane: "Sessions" | "Micros" | "Playlists" | "Resources";
+  onLane: (lane: "Sessions" | "Micros" | "Playlists" | "Resources") => void;
   onOpen: (session: ApiSession) => void;
 }) {
-  const [lane, setLane] = useState<"Sessions" | "Micros" | "Playlists" | "Resources">("Sessions");
   const [fileFormat, setFileFormat] = useState<(typeof FILE_FORMATS)[number]["label"]>("All formats");
   const [formatsOpen, setFormatsOpen] = useState(false);
   const [library, setLibrary] = useState<"hub" | "recordings" | "slides">("hub");
   const [query, setQuery] = useState("");
   const [watched, setWatched] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setLibrary("hub");
+  }, [lane]);
   const shown = sessions.filter((item) =>
     (item.title || "").toLowerCase().includes(query.toLowerCase()),
   );
@@ -1102,31 +1231,41 @@ function LearnView({
         />
         <DataState result={loadState} label="Sessions">
           {shown.length === 0 ? (
-            <div className="empty-note">No sessions published yet.</div>
+            <div className="visual-grid">
+              <VisualCard
+                kind="Session"
+                title="No sessions yet"
+                description="Published recordings appear here in the order set for members."
+                meta="Horizontal recording"
+              />
+            </div>
           ) : (
-            shown.map((item) => (
-              <article className="program-card" key={item.id}>
-                <div>
-                  <strong>{item.title || "Session"}</strong>
-                  <p>{item.description || "Recorded session"}</p>
-                </div>
-                <button className="state on" type="button" onClick={() => onOpen(item)}>
-                  Watch
-                </button>
-              </article>
-            ))
+            <div className="visual-grid">
+              {shown.map((item) => (
+                <VisualCard
+                  key={item.id}
+                  kind="Session"
+                  title={item.title || "Session"}
+                  description={item.description || "Longer horizontal recording"}
+                  meta="Horizontal recording"
+                  image={item.posterUrl}
+                  onClick={() => onOpen(item)}
+                  extra={
+                    <button
+                      className="visual-chip"
+                      type="button"
+                      onClick={() =>
+                        setWatched((current) => ({ ...current, [item.id]: !current[item.id] }))
+                      }
+                    >
+                      {watched[item.id] ? "Watched on this device" : "Mark as watched"}
+                    </button>
+                  }
+                />
+              ))}
+            </div>
           )}
         </DataState>
-        {shown.map((item) => (
-          <button
-            key={`${item.id}-watched`}
-            className="portal-link"
-            type="button"
-            onClick={() => setWatched((current) => ({ ...current, [item.id]: !current[item.id] }))}
-          >
-            {watched[item.id] ? "Watched on this device" : "Mark as watched"}
-          </button>
-        ))}
       </div>
     );
   }
@@ -1153,7 +1292,7 @@ function LearnView({
             role="tab"
             className={lane === label ? "selected" : ""}
             aria-selected={lane === label}
-            onClick={() => setLane(label)}
+            onClick={() => onLane(label)}
           >
             {label}
           </button>
@@ -1162,39 +1301,53 @@ function LearnView({
       {lane === "Sessions" && (
         <DataState result={loadState} label="Sessions">
           {shown.length === 0 ? (
-            <div className="empty-note">
-              {query
-                ? "No sessions match your search."
-                : "No sessions published yet. Published sessions appear here in the order set for Learnings. Calendar and registration live under Events."}
+            <div className="visual-grid">
+              <VisualCard
+                kind="Session"
+                title={query ? "No matches" : "No sessions yet"}
+                description={
+                  query
+                    ? "No sessions match your search."
+                    : "Published sessions appear here in the order set for Learnings. Calendar and registration live under Events."
+                }
+                meta="Horizontal recording"
+              />
             </div>
           ) : (
-            <div className="resource-list">
-              {shown.map((item, index) => (
-                <button className="resource-card" key={item.id} type="button" onClick={() => onOpen(item)}>
-                  <div className={`resource-icon tone-${index % 3}`}>
-                    <Play fill="currentColor" />
-                  </div>
-                  <div>
-                    <strong>{item.title || "Session"}</strong>
-                    <span>{item.description || "Recorded session"}</span>
-                  </div>
-                  <ChevronRight />
-                </button>
+            <div className="visual-grid">
+              {shown.map((item) => (
+                <VisualCard
+                  key={item.id}
+                  kind="Session"
+                  title={item.title || "Session"}
+                  description={item.description || "Longer horizontal recording"}
+                  meta="Horizontal recording"
+                  image={item.posterUrl}
+                  onClick={() => onOpen(item)}
+                />
               ))}
             </div>
           )}
         </DataState>
       )}
       {lane === "Micros" && (
-        <div className="empty-note">
-          <strong>No micros yet</strong>
-          <p>Short vertical videos, like reels, appear here when they are published. No placeholder clips.</p>
+        <div className="visual-grid">
+          <VisualCard
+            kind="Micro"
+            title="No micros yet"
+            description="Short vertical videos appear here when they are published."
+            meta="Vertical · short"
+          />
         </div>
       )}
       {lane === "Playlists" && (
-        <div className="empty-note">
-          <strong>No playlists published yet</strong>
-          <p>A playlist is a combination of micros or sessions. Published playlists appear here.</p>
+        <div className="visual-grid">
+          <VisualCard
+            kind="Playlist"
+            title="No playlists yet"
+            description="A playlist combines micros or sessions."
+            meta="Micros or sessions"
+          />
         </div>
       )}
       {lane === "Resources" && (
@@ -1242,31 +1395,43 @@ function LearnView({
               </div>
             </div>
           ) : null}
-          {LEARNING_FILES.filter((file) => fileFormat === "All formats" || file.format === fileFormat)
-            .length === 0 ? (
-            <div className="empty-note">
-              <strong>No files yet</strong>
-              <p>Nothing in this format yet. Choose another filter, or check back when a file is added.</p>
-            </div>
-          ) : (
-            LEARNING_FILES.filter(
-              (file) => fileFormat === "All formats" || file.format === fileFormat,
-            ).map((file) => (
-              <article className="program-card" key={file.title}>
-                <div>
-                  <span className="soft-chip">{file.format}</span>
-                  <strong>{file.title}</strong>
-                  <p>{file.copy}</p>
-                  <p>
-                    {file.meta} · {file.detail}
-                  </p>
+          {(() => {
+            const files = LEARNING_FILES.filter((file) => {
+              const matchesFormat = fileFormat === "All formats" || file.format === fileFormat;
+              const hay = `${file.title} ${file.copy} ${file.detail} ${file.meta}`.toLowerCase();
+              return matchesFormat && (!query || hay.includes(query.toLowerCase()));
+            });
+            if (files.length === 0) {
+              return (
+                <div className="visual-grid">
+                  <VisualCard
+                    kind={fileFormat === "All formats" ? "Docs" : fileFormat}
+                    title={query ? "No matches" : "No files yet"}
+                    description={
+                      query
+                        ? "No files match your search."
+                        : "Nothing in this format yet. Choose another filter, or check back when a file is added."
+                    }
+                    meta={fileFormat === "All formats" ? "Files" : fileFormat}
+                  />
                 </div>
-                <button className="state on" type="button" onClick={() => setLibrary("slides")}>
-                  Open
-                </button>
-              </article>
-            ))
-          )}
+              );
+            }
+            return (
+              <div className="visual-grid">
+                {files.map((file) => (
+                  <VisualCard
+                    key={file.title}
+                    kind={file.format}
+                    title={file.title}
+                    description={file.copy}
+                    meta={`${file.detail} · ${file.meta}`}
+                    onClick={() => setLibrary("slides")}
+                  />
+                ))}
+              </div>
+            );
+          })()}
         </>
       )}
       <div className="settings-list">

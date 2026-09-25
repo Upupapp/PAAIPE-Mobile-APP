@@ -164,6 +164,195 @@
   font-size: 14px;
   min-width: 0;
 }
+.portal-shell.teresa-inside .visual-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.portal-shell.teresa-inside .visual-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--sw-line);
+  border-radius: 18px;
+  background: #fff;
+  text-align: left;
+  color: inherit;
+}
+.portal-shell.teresa-inside .visual-open {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.portal-shell.teresa-inside .visual-banner {
+  display: grid;
+  place-items: center;
+  height: 96px;
+  background: linear-gradient(145deg, #2f6cf0, #163a86);
+  color: #fff;
+}
+.portal-shell.teresa-inside .visual-banner.tone-micro {
+  height: 128px;
+  background: linear-gradient(180deg, #15bbea, #065092);
+}
+.portal-shell.teresa-inside .visual-banner.tone-playlist {
+  background: linear-gradient(145deg, #2346a8, #0b2458);
+}
+.portal-shell.teresa-inside .visual-banner.tone-slides {
+  background: linear-gradient(145deg, #1e4fc4, #12306e);
+}
+.portal-shell.teresa-inside .visual-banner.tone-pdf,
+.portal-shell.teresa-inside .visual-banner.tone-docs {
+  background: linear-gradient(160deg, #3d4f73, #1c2740);
+}
+.portal-shell.teresa-inside .visual-banner.tone-template {
+  background: linear-gradient(145deg, #1a6b8a, #0e3d55);
+}
+.portal-shell.teresa-inside .visual-banner.tone-checklist {
+  background: linear-gradient(145deg, #1a7a45, #0d3d28);
+}
+.portal-shell.teresa-inside .visual-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.portal-shell.teresa-inside .scene {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+.portal-shell.teresa-inside .scene .paper {
+  display: grid;
+  gap: 5px;
+  width: 72%;
+  padding: 10px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 16px rgba(8, 24, 64, 0.25);
+}
+.portal-shell.teresa-inside .scene-slides .paper i,
+.portal-shell.teresa-inside .scene-page .paper i {
+  display: block;
+  height: 6px;
+  border-radius: 99px;
+  background: #d5e2f8;
+}
+.portal-shell.teresa-inside .scene-slides .paper i:first-child,
+.portal-shell.teresa-inside .scene-page .paper i:first-child {
+  width: 62%;
+  background: #2f6cf0;
+}
+.portal-shell.teresa-inside .scene-template .paper {
+  grid-template-columns: 1fr 1fr;
+}
+.portal-shell.teresa-inside .scene-template .paper i {
+  display: block;
+  height: 16px;
+  border-radius: 4px;
+  background: #e7eefb;
+  border: 1px solid #c5d6f5;
+}
+.portal-shell.teresa-inside .scene-checks .paper i {
+  display: block;
+  height: 8px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #1a7a45 0 8px, transparent 8px 14px, #d5e2f8 14px);
+}
+.portal-shell.teresa-inside .scene-session .wide,
+.portal-shell.teresa-inside .scene-micro .phone {
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+.portal-shell.teresa-inside .scene-session .wide {
+  width: 78%;
+  height: 62%;
+  border-radius: 8px;
+}
+.portal-shell.teresa-inside .scene-micro .phone {
+  width: 42px;
+  height: 78%;
+  border-radius: 10px;
+}
+.portal-shell.teresa-inside .scene-session svg,
+.portal-shell.teresa-inside .scene-micro svg {
+  width: 16px;
+  height: 16px;
+}
+.portal-shell.teresa-inside .scene-playlist {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+.portal-shell.teresa-inside .scene-playlist span {
+  width: 22px;
+  border-radius: 4px 4px 0 0;
+  background: rgba(255, 255, 255, 0.85);
+}
+.portal-shell.teresa-inside .scene-playlist span:nth-child(1) { height: 28px; opacity: 0.55; }
+.portal-shell.teresa-inside .scene-playlist span:nth-child(2) { height: 44px; }
+.portal-shell.teresa-inside .scene-playlist span:nth-child(3) { height: 34px; opacity: 0.75; }
+.portal-shell.teresa-inside .visual-copy {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px 12px;
+}
+.portal-shell.teresa-inside .visual-copy small {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sw-blue);
+}
+.portal-shell.teresa-inside .visual-copy strong {
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.portal-shell.teresa-inside .visual-copy em {
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--sw-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.portal-shell.teresa-inside .visual-meta {
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: #1e4fc4;
+}
+.portal-shell.teresa-inside .visual-chip {
+  margin: 0 10px 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--sw-line);
+  border-radius: 999px;
+  background: #f4f7fd;
+  color: var(--sw-blue);
+  font-size: 10px;
+  font-weight: 600;
+}
 .portal-shell.teresa-inside .lane-row {
   display: flex;
   flex-wrap: nowrap;
