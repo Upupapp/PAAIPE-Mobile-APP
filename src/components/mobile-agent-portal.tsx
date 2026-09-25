@@ -1329,11 +1329,11 @@ function HomeView({
 
 const LEARNING_FILES = [
   {
-    title: "From Signals to Strategy",
+    title: "From Signals to Strategy (sample)",
     format: "Slides",
-    detail: "Gamma · Slide deck",
-    copy: "The September 2026 AI Exchange deck by Sven Bally — using AI to turn data into real insight. Shared with the speaker's permission.",
-    meta: "AI Exchange · Sept 15",
+    detail: "Slide deck · preview",
+    copy: "Sample AI Exchange deck by Sample Speaker — using AI to turn data into real insight. Preview content until session materials are connected.",
+    meta: "AI Exchange · sample",
   },
 ] as const;
 
@@ -2315,7 +2315,7 @@ const FEED_SEED: FeedPost[] = [
     handle: "@paaipe",
     initials: "PA",
     time: "2h",
-    body: "Recap reel from the September AI Exchange — From Signals to Strategy with Sven Bally. Full deck is in Learnings under Resources.",
+    body: "Recap reel from a recent AI Exchange — From Signals to Strategy with Sample Speaker. Full deck is in Learnings under Resources. (Sample preview post.)",
     media: { kind: "video", src: "/feed/exchange-recap.mp4", poster: "/feed/exchange-recap.jpg" },
     likes: 24,
     liked: false,
