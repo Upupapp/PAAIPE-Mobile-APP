@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=390" />
+<title>PAAIPE soft-widget comps — Inter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600&display=swap" rel="stylesheet" />
+<style>
+  /* Type weight rules (Apple HIG + Material):
+     400 Regular — body, descriptions, secondary labels, inactive nav
+     500 Medium  — section titles, chips, CTAs, names in lists, active nav
+     600 Semibold — page H1 only (rarely a hero number)
+     Never 700 Bold on labels/CTAs/eyebrows */
+  :root {
+    --blue: #2f6cf0;
+    --blue-deep: #1e4fc4;
+    --blue-soft: #e8f0ff;
+    --blue-wash: #f3f7ff;
+    --cyan: #3ec6e0;
+    --gold: #f0b429;
+    --ink: #1a2336;
+    --muted: #7a8699;
+    --line: #e6ecf5;
+    --page: #f4f6fa;
+    --white: #ffffff;
+    --r-xl: 28px;
+    --r-lg: 22px;
+    --r-md: 16px;
+    --r-sm: 12px;
+    --r-pill: 999px;
+    --shadow: 0 8px 28px rgba(30, 60, 120, 0.08);
+    --shadow-sm: 0 4px 14px rgba(30, 60, 120, 0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    background: #cfd6e4;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01" on, "cv11" on;
+  }
+  .stage {
+    display: flex; gap: 28px; padding: 32px;
+    justify-content: center; flex-wrap: wrap; align-items: flex-start;
+  }
+  .phone {
+    width: 390px; height: 844px; border-radius: 40px; overflow: hidden;
+    background: var(--page); position: relative;
+    box-shadow: 0 28px 70px rgba(20,40,80,.22);
+    border: 1px solid rgba(255,255,255,.6);
+  }
+  .phone-inner {
+    height: 100%; display: flex; flex-direction: column;
+    background:
+      radial-gradient(ellipse 90% 42% at 50% -4%, #d4e4ff 0%, transparent 70%),
+      var(--page);
+  }
+  .status {
+    height: 44px; padding: 14px 24px 0;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; font-weight: 500; letter-spacing: -0.01em; color: var(--ink);
+  }
+  .top {
+    padding: 4px 18px 12px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .avatar {
+    width: 42px; height: 42px; border-radius: 50%;
+    background: linear-gradient(145deg, #9ec0ff, var(--blue));
+    color: white; display: grid; place-items: center;
+    font-size: 13px; font-weight: 600; letter-spacing: -0.02em;
+    flex: 0 0 42px; box-shadow: 0 4px 12px rgba(47,108,240,.25);
+  }
+  .greet { flex: 1; min-width: 0; }
+  .greet .hi {
+    font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: -0.01em;
+  }
+  .greet .name {
+    margin-top: 1px; font-size: 16px; font-weight: 500; letter-spacing: -0.025em;
+  }
+  .icon-row { display: flex; gap: 8px; }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--white);
+    display: grid; place-items: center; color: var(--ink);
+    box-shadow: var(--shadow-sm);
+  }
+  .icon-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .scroll { flex: 1; overflow: hidden; padding: 4px 16px 96px; }
+  .eyebrow {
+    font-size: 11px; font-weight: 400; letter-spacing: 0.02em;
+    text-transform: none; color: var(--muted); margin-bottom: 4px;
+  }
+  h1 {
+    font-size: 24px; font-weight: 600; letter-spacing: -0.035em;
+    line-height: 1.15; color: var(--ink);
+  }
+  .lede {
+    margin-top: 6px; font-size: 14px; font-weight: 400;
+    line-height: 1.45; color: var(--muted); letter-spacing: -0.01em;
+  }
+  .section { margin-top: 18px; }
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 10px; gap: 8px;
+  }
+  .section-head h2 {
+    font-size: 16px; font-weight: 500; letter-spacing: -0.02em;
+  }
+  .section-head .link {
+    font-size: 12px; font-weight: 500; color: var(--blue); letter-spacing: -0.01em;
+  }
+  .widget {
+    background: var(--white); border-radius: var(--r-lg);
+    box-shadow: var(--shadow-sm); border: 1px solid rgba(230,236,245,.9);
+    padding: 16px;
+  }
+  .widget.soft {
+    background: var(--blue-soft); border-color: transparent; box-shadow: none;
+  }
+  .widget.primary {
+    background: linear-gradient(135deg, var(--blue) 0%, #4b8af5 55%, #5aa0ff 100%);
+    color: white; border: none; box-shadow: 0 12px 28px rgba(47,108,240,.28);
+  }
+  .widget.deep {
+    /* KEEP meaning: continue-learning / network — soft blue primary, not navy slab */
+    background: linear-gradient(145deg, #2346a8 0%, var(--blue) 100%);
+    color: white; border: none; box-shadow: 0 12px 28px rgba(30,79,196,.26);
+  }
+  .chips { display: flex; gap: 8px; margin-top: 14px; overflow: hidden; }
+  .chip {
+    height: 32px; padding: 0 14px; border-radius: var(--r-pill);
+    font-size: 12px; font-weight: 500; letter-spacing: -0.01em;
+    border: 1px solid var(--line); background: var(--white); color: var(--muted);
+    display: inline-flex; align-items: center; white-space: nowrap;
+  }
+  .chip.on { background: var(--blue); border-color: var(--blue); color: white; }
+  .btn-row { display: flex; gap: 8px; margin-top: 14px; }
+  .btn {
+    height: 40px; flex: 1; border-radius: var(--r-pill);
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    letter-spacing: -0.015em; border: none;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn.solid { background: white; color: var(--blue); }
+  .btn.ghost { background: rgba(255,255,255,.2); color: white; }
+  .btn.gold { background: var(--gold); color: #1a2336; }
+  .btn.outline {
+    background: var(--white); color: var(--blue);
+    border: 1px solid var(--line);
+  }
+  .btn.blue { background: var(--blue); color: white; }
+  .membership {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
+  }
+  .membership .cell {
+    background: var(--white); border-radius: var(--r-md);
+    padding: 12px 14px; box-shadow: var(--shadow-sm); border: 1px solid var(--line);
+  }
+  .membership .label {
+    font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: -0.01em;
+  }
+  .membership .value {
+    margin-top: 4px; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+  }
+  .learn {
+    display: flex; gap: 12px; align-items: center;
+  }
+  .play {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,.95); color: var(--blue);
+    display: grid; place-items: center; flex: 0 0 44px;
+  }
+  .play svg { width: 14px; height: 14px; fill: currentColor; margin-left: 2px; }
+  .learn .kicker {
+    font-size: 11px; font-weight: 400; opacity: .85; letter-spacing: 0.02em;
+  }
+  .learn .title {
+    margin-top: 3px; font-size: 15px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.25;
+  }
+  .progress { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+  .bar { flex: 1; height: 4px; border-radius: 99px; background: rgba(255,255,255,.25); overflow: hidden; }
+  .bar i { display: block; width: 68%; height: 100%; background: var(--gold); border-radius: 99px; }
+  .progress span { font-size: 12px; font-weight: 500; color: var(--gold); }
+  .event-card .hero {
+    height: 110px; border-radius: var(--r-md); margin: -4px -4px 12px;
+    background: linear-gradient(145deg, #dce9ff, #c8f2f8);
+    padding: 12px 14px; display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  .event-card .tag {
+    align-self: flex-start; font-size: 10px; font-weight: 500;
+    color: var(--blue); background: rgba(255,255,255,.85);
+    padding: 4px 8px; border-radius: var(--r-pill); margin-bottom: auto;
+  }
+  .event-card .hero h3 {
+    font-size: 18px; font-weight: 600; letter-spacing: -0.03em; color: var(--ink);
+  }
+  .event-card .date {
+    font-size: 12px; font-weight: 500; color: var(--blue); letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  }
+  .event-card .title { font-size: 15px; font-weight: 500; letter-spacing: -0.02em; }
+  .event-card .body {
+    margin-top: 4px; font-size: 13px; font-weight: 400; line-height: 1.4; color: var(--muted);
+  }
+  .stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px;
+  }
+  .stats .cell {
+    background: var(--white); border-radius: var(--r-md); padding: 14px 8px;
+    text-align: center; box-shadow: var(--shadow-sm); border: 1px solid var(--line);
+  }
+  .stats strong {
+    display: block; font-size: 20px; font-weight: 600; letter-spacing: -0.03em; color: var(--blue);
+  }
+  .stats span {
+    display: block; margin-top: 3px; font-size: 10px; font-weight: 400; color: var(--muted);
+  }
+  .network {
+    text-align: center; padding: 28px 16px;
+  }
+  .network .num {
+    font-size: 48px; font-weight: 600; letter-spacing: -0.04em; line-height: 1;
+  }
+  .network .cap {
+    margin-top: 8px; font-size: 13px; font-weight: 400; opacity: .9;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #7ef0ff; box-shadow: 0 0 8px #7ef0ff; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .mini .ico {
+    width: 36px; height: 36px; border-radius: 12px; background: var(--blue-soft);
+    color: var(--blue); display: grid; place-items: center; margin-bottom: 12px;
+  }
+  .mini .ico svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .mini h4 { font-size: 14px; font-weight: 500; letter-spacing: -0.02em; }
+  .mini p { margin-top: 3px; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .spotlight { display: flex; gap: 12px; align-items: center; }
+  .spotlight .av {
+    width: 44px; height: 44px; border-radius: 50%; background: var(--gold);
+    color: #1a2336; display: grid; place-items: center;
+    font-size: 13px; font-weight: 600; flex: 0 0 44px;
+  }
+  .spotlight .role { font-size: 11px; font-weight: 400; color: var(--blue); }
+  .spotlight .nm { margin-top: 2px; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; }
+  .spotlight .bio { margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .nav {
+    position: absolute; left: 14px; right: 14px; bottom: 16px;
+    height: 64px; background: rgba(255,255,255,.94);
+    backdrop-filter: blur(16px); border-radius: 24px;
+    border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(30,60,120,.1);
+    display: grid; grid-template-columns: repeat(5, 1fr); align-items: center;
+    padding: 0 4px;
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 10px; font-weight: 400; color: var(--muted);
+  }
+  .nav-item .ni {
+    width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+  }
+  .nav-item.active { color: var(--blue); font-weight: 500; }
+  .nav-item.active .ni { background: var(--blue); color: white; box-shadow: 0 6px 14px rgba(47,108,240,.35); }
+  .nav-item svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .caption {
+    width: 390px; margin: 12px auto 0; text-align: center;
+    font-size: 12px; font-weight: 500; color: #445; letter-spacing: -0.01em;
+  }
+  .caption small { display: block; margin-top: 2px; font-weight: 400; color: #778; }
+  .page-bar {
+    padding: 0 18px 8px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .page-bar .title { font-size: 17px; font-weight: 500; letter-spacing: -0.025em; }
+</style>
+</head>
+<body>
+<div class="stage">
+
+<!-- HOME -->
+<div>
+<div class="phone" id="home">
+  <div class="phone-inner">
+    <div class="status"><span>9:41</span><span>■■■ ●</span></div>
+    <div class="top">
+      <div class="avatar">PE</div>
+      <div class="greet">
+        <div class="hi">Good day</div>
+        <div class="name">Paul Espinas</div>
+      </div>
+      <div class="icon-row">
+        <button class="icon-btn" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg></button>
+        <button class="icon-btn" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M6 17h12l-1.2-1.2A2 2 0 0 1 16 14.4V11a4 4 0 1 0-8 0v3.4a2 2 0 0 1-.8 1.6L6 17Z"/><path d="M10 17a2 2 0 0 0 4 0"/></svg></button>
+      </div>
+    </div>
+    <div class="scroll">
+      <p class="eyebrow">Agent network online</p>
+      <h1>Magandang araw, Paul.</h1>
+      <p class="lede">Your gateway to the Philippine AI community.</p>
+      <div class="membership">
+        <div class="cell"><div class="label">Membership</div><div class="value">Confirmed Agent</div></div>
+        <div class="cell"><div class="label">Agent ID</div><div class="value" style="color:var(--muted)">—</div></div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Continue learning</h2><span class="link">See all</span></div>
+        <div class="widget deep">
+          <div class="learn">
+            <div class="play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+            <div style="flex:1;min-width:0">
+              <div class="kicker">Session 04 · In progress</div>
+              <div class="title">AI-Powered Business Transformation</div>
+              <div class="progress"><div class="bar"><i></i></div><span>68%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Upcoming event</h2><span class="link">25 Sep</span></div>
+        <div class="widget event-card">
+          <div class="hero">
+            <span class="tag">Online · Every 2nd Tuesday</span>
+            <h3>AI Exchange</h3>
+          </div>
+          <div class="title">PAAIPE AI Exchange</div>
+          <div class="body">Future-ready strategies for Filipino AI leaders.</div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="cell"><strong>05</strong><span>Founding agents</span></div>
+        <div class="cell"><strong>04</strong><span>Upcoming events</span></div>
+        <div class="cell"><strong>12</strong><span>Learning assets</span></div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active"><div class="ni"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"/></svg></div>Home</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zM13 5h7v14h-7z"/></svg></div>Learn</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></div>Events</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19a6 6 0 0 1 12 0M13 19a5 5 0 0 1 8 0"/></svg></div>Community</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></div>Profile</div>
+    </nav>
+  </div>
+</div>
+<p class="caption">Home<small>Soft header · widget cards · Semibold H1 only</small></p>
+</div>
+
+<!-- EVENTS -->
+<div>
+<div class="phone" id="events">
+  <div class="phone-inner">
+    <div class="status"><span>9:41</span><span>■■■ ●</span></div>
+    <div class="page-bar">
+      <button class="icon-btn" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div class="title">Events</div>
+      <button class="icon-btn" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M6 17h12l-1.2-1.2A2 2 0 0 1 16 14.4V11a4 4 0 1 0-8 0v3.4a2 2 0 0 1-.8 1.6L6 17Z"/><path d="M10 17a2 2 0 0 0 4 0"/></svg></button>
+    </div>
+    <div class="scroll">
+      <p class="eyebrow">Connect & collaborate</p>
+      <h1>Events</h1>
+      <p class="lede">Meet the builders shaping AI across the Philippines.</p>
+      <div class="chips">
+        <span class="chip on">Upcoming</span>
+        <span class="chip">Past</span>
+        <span class="chip">Online</span>
+      </div>
+      <div class="section">
+        <div class="widget primary" style="padding:18px">
+          <div style="font-size:11px;font-weight:400;opacity:.85">Next up · Sep 25</div>
+          <div style="margin-top:6px;font-size:20px;font-weight:600;letter-spacing:-0.03em;line-height:1.2">PAAIPE AI Exchange</div>
+          <div style="margin-top:6px;font-size:13px;font-weight:400;opacity:.9;line-height:1.4">Turning emerging AI into real business outcomes.</div>
+          <div class="btn-row">
+            <button class="btn solid">Register</button>
+            <button class="btn ghost">Calendar</button>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="widget event-card">
+          <div class="date">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>
+            September 25 · 7:00 PM
+          </div>
+          <div class="title">Member briefings</div>
+          <div class="body">Quarterly closed-door sessions for Confirmed Agents.</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="widget soft">
+          <div style="font-size:14px;font-weight:500;letter-spacing:-0.02em">Add to your calendar</div>
+          <div style="margin-top:4px;font-size:12px;font-weight:400;color:var(--muted);line-height:1.4">Reminders land in your inbox the morning of each Exchange.</div>
+        </div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"/></svg></div>Home</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zM13 5h7v14h-7z"/></svg></div>Learn</div>
+      <div class="nav-item active"><div class="ni"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></div>Events</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19a6 6 0 0 1 12 0M13 19a5 5 0 0 1 8 0"/></svg></div>Community</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></div>Profile</div>
+    </nav>
+  </div>
+</div>
+<p class="caption">Events<small>Primary blue widget · pill chips · Medium CTAs</small></p>
+</div>
+
+<!-- COMMUNITY -->
+<div>
+<div class="phone" id="community">
+  <div class="phone-inner">
+    <div class="status"><span>9:41</span><span>■■■ ●</span></div>
+    <div class="page-bar">
+      <button class="icon-btn" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div class="title">Community</div>
+      <button class="icon-btn" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M6 17h12l-1.2-1.2A2 2 0 0 1 16 14.4V11a4 4 0 1 0-8 0v3.4a2 2 0 0 1-.8 1.6L6 17Z"/><path d="M10 17a2 2 0 0 0 4 0"/></svg></button>
+    </div>
+    <div class="scroll">
+      <p class="eyebrow">Your AI network</p>
+      <h1>Community</h1>
+      <p class="lede">Find expertise, collaborators, and opportunities.</p>
+      <div class="section">
+        <div class="widget deep network">
+          <div class="num">5</div>
+          <div class="cap"><i class="dot"></i>Founding agents connected</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="grid2">
+          <div class="widget mini">
+            <div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19a6 6 0 0 1 12 0M13 19a5 5 0 0 1 8 0"/></svg></div>
+            <h4>Directory</h4>
+            <p>Discover members</p>
+          </div>
+          <div class="widget mini">
+            <div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 1.5"/></svg></div>
+            <h4>Programs</h4>
+            <p>Join an initiative</p>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Agent spotlight</h2><span class="link">View all</span></div>
+        <div class="widget spotlight">
+          <div class="av">MB</div>
+          <div style="flex:1;min-width:0">
+            <div class="role">AI leadership</div>
+            <div class="nm">Melody Belza</div>
+            <div class="bio">Building people-centered AI ecosystems.</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.7"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"/></svg></div>Home</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zM13 5h7v14h-7z"/></svg></div>Learn</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></div>Events</div>
+      <div class="nav-item active"><div class="ni"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19a6 6 0 0 1 12 0M13 19a5 5 0 0 1 8 0"/></svg></div>Community</div>
+      <div class="nav-item"><div class="ni"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></div>Profile</div>
+    </nav>
+  </div>
+</div>
+<p class="caption">Community<small>Soft widgets · blue network card · Regular body</small></p>
+</div>
+
+</div>
+</body>
+</html>
