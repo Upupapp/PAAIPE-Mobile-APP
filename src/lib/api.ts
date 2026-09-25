@@ -232,6 +232,7 @@ export type DirectoryMember = {
   initials: string;
   agentNumber: string | null;
   role?: string;
+  photo?: string;
 };
 export type DirectoryPage = {
   members: DirectoryMember[];

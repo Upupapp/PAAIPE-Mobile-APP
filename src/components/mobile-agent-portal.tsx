@@ -140,6 +140,7 @@ type PublicCard = {
   about: string;
   work: string;
   link: string;
+  photo: string;
   directoryVisible: boolean;
 };
 
@@ -157,6 +158,7 @@ function readPublicCard(): PublicCard | null {
       about: typeof value.about === "string" ? value.about : "",
       work: typeof value.work === "string" ? value.work : "",
       link: typeof value.link === "string" ? value.link : "",
+      photo: typeof value.photo === "string" ? value.photo : "",
       directoryVisible: value.directoryVisible === true,
     };
   } catch {
@@ -208,9 +210,24 @@ export function MobileAgentPortal() {
   );
   const events = eventData.data ?? [];
   const sessions = sessionData.data ?? [];
-  const directory = preview && !signedIn ? PREVIEW_DIRECTORY : directoryData.data?.members ?? [];
+  const baseDirectory = preview && !signedIn ? PREVIEW_DIRECTORY : directoryData.data?.members ?? [];
+  const selfMember: DirectoryMember | null =
+    publicCard && publicCard.directoryVisible && publicCard.name.trim()
+      ? {
+          uid: "self",
+          name: publicCard.name.trim(),
+          initials: initialsFromName(publicCard.name, portalIdentity?.email ?? ""),
+          agentNumber: portalIdentity?.agentNumber ?? null,
+          ...(publicCard.headline.trim() ? { role: publicCard.headline.trim() } : {}),
+          ...(publicCard.photo ? { photo: publicCard.photo } : {}),
+        }
+      : null;
+  const directory = selfMember
+    ? [selfMember, ...baseDirectory.filter((m) => m.uid !== "self")]
+    : baseDirectory;
   const directoryTotal =
-    preview && !signedIn ? PREVIEW_DIRECTORY.length : directoryData.data?.total ?? 0;
+    (preview && !signedIn ? PREVIEW_DIRECTORY.length : directoryData.data?.total ?? 0) +
+    (selfMember ? 1 : 0);
   const [signOutError, setSignOutError] = useState("");
   const logout = async () => {
     if (preview && !user) {
@@ -444,6 +461,7 @@ export function MobileAgentPortal() {
     firstName: displayName.split(/\s+/)[0] || portalIdentity.firstName,
     initials,
   };
+  const photo = publicCard?.photo ?? "";
   const savePublicCard = async (next: PublicCard) => {
     const saved = { ...next, name: next.name.trim() };
     setPublicCard(saved);
@@ -570,7 +588,7 @@ export function MobileAgentPortal() {
             <PublicProfileView identity={shownIdentity} card={publicCard} />
           )}
           {active === "Feed" && (
-            <FeedView author={displayName} initials={initials} />
+            <FeedView author={displayName} initials={initials} photo={photo} />
           )}
           {active === "MemberProfile" && (
             <MemberProfileView member={selectedMember} />
@@ -1661,6 +1679,7 @@ type FeedPost = {
   author: string;
   handle: string;
   initials: string;
+  avatar?: string;
   time: string;
   body: string;
   media?: FeedMedia;
@@ -1711,7 +1730,7 @@ const FEED_SEED: FeedPost[] = [
   },
 ];
 
-function FeedView({ author, initials }: { author: string; initials: string }) {
+function FeedView({ author, initials, photo }: { author: string; initials: string; photo: string }) {
   const [posts, setPosts] = useState<FeedPost[]>(FEED_SEED);
   const [draft, setDraft] = useState("");
   const [openComments, setOpenComments] = useState<string | null>(null);
@@ -1748,6 +1767,7 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
         author,
         handle: "@you",
         initials,
+        ...(photo ? { avatar: photo } : {}),
         time: "now",
         body,
         ...(attachment ? { media: attachment } : {}),
@@ -1814,7 +1834,9 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
         }}
       >
         <div className="feed-composer-row">
-          <div className="avatar">{initials}</div>
+          <div className="avatar">
+            {photo ? <img src={photo} alt="" /> : initials}
+          </div>
           <textarea
             ref={draftRef}
             value={draft}
@@ -1901,7 +1923,9 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
       {posts.map((post) => (
         <article className="feed-card" key={post.id}>
           <header>
-            <div className="avatar">{post.initials}</div>
+            <div className="avatar">
+              {post.avatar ? <img src={post.avatar} alt="" /> : post.initials}
+            </div>
             <span className="feed-author">
               <strong>{post.author}</strong>
               <small>
@@ -2163,10 +2187,19 @@ function EditProfileView({
   const [about, setAbout] = useState(card?.about || "");
   const [work, setWork] = useState(card?.work || "");
   const [link, setLink] = useState(card?.link || "");
+  const [photo, setPhoto] = useState(card?.photo || "");
   const [directoryVisible, setDirectoryVisible] = useState(card?.directoryVisible ?? false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const photoRef = useRef<HTMLInputElement>(null);
+
+  const pickPhoto = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(typeof reader.result === "string" ? reader.result : "");
+    reader.readAsDataURL(file);
+  };
 
   const submit = async () => {
     if (!name.trim()) {
@@ -2178,7 +2211,7 @@ function EditProfileView({
     setError("");
     setSaved(false);
     try {
-      await onSave({ name, headline, about, work, link, directoryVisible });
+      await onSave({ name, headline, about, work, link, photo, directoryVisible });
       setSaved(true);
     } catch {
       setError("The name could not be saved to your account. The public preview on this device was kept.");
@@ -2205,6 +2238,36 @@ function EditProfileView({
           void submit();
         }}
       >
+        <div className="photo-field">
+          <div className="avatar profile-avatar photo-preview">
+            {photo ? <img src={photo} alt="" /> : identity.initials}
+          </div>
+          <div className="photo-actions">
+            <input
+              ref={photoRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => pickPhoto(event.target.files?.[0])}
+            />
+            <button type="button" className="composer-media" onClick={() => photoRef.current?.click()}>
+              <ImagePlus />
+              {photo ? "Change photo" : "Upload photo"}
+            </button>
+            {photo ? (
+              <button
+                type="button"
+                className="photo-clear"
+                onClick={() => {
+                  setPhoto("");
+                  if (photoRef.current) photoRef.current.value = "";
+                }}
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+        </div>
         <label>
           Name
           <input value={name} onChange={(event) => setName(event.target.value)} />
@@ -2248,11 +2311,14 @@ function PublicProfileView({ identity, card }: { identity: DisplayIdentity; card
   const about = card?.about.trim() || "";
   const work = card?.work.trim() || "";
   const link = card?.link.trim() || "";
+  const photo = card?.photo || "";
   return (
     <div className="screen-stack animate-fade-in page-screen">
       <p className="public-note">This is what members see when they open your photo.</p>
       <section className="profile-hero public-card">
-        <div className="avatar profile-avatar">{identity.initials}</div>
+        <div className="avatar profile-avatar">
+          {photo ? <img src={photo} alt="" /> : identity.initials}
+        </div>
         <h1>{identity.displayName}</h1>
         {headline ? <p className="public-headline">{headline}</p> : null}
         <MembershipPill identity={identity} />
@@ -2320,7 +2386,9 @@ function DirectoryView({
         <div className="member-list">
           {shown.map((m) => (
             <button className="member-card" type="button" key={m.uid} onClick={() => onOpen(m)}>
-              <div className="avatar">{m.initials}</div>
+              <div className="avatar">
+                {m.photo ? <img src={m.photo} alt="" /> : m.initials}
+              </div>
               <div>
                 <strong>{m.name}</strong>
                 <span>{m.role || (m.agentNumber ? `Agent ${m.agentNumber}` : "Confirmed Agent")}</span>
@@ -2345,7 +2413,9 @@ function MemberProfileView({ member }: { member: DirectoryMember | null }) {
   return (
     <div className="screen-stack animate-fade-in page-screen">
       <section className="profile-hero public-card">
-        <div className="avatar profile-avatar">{member.initials}</div>
+        <div className="avatar profile-avatar">
+          {member.photo ? <img src={member.photo} alt="" /> : member.initials}
+        </div>
         <h1>{member.name}</h1>
         {member.role ? <p className="public-headline">{member.role}</p> : null}
         <span className="membership-pill status-agent">

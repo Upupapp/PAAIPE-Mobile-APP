@@ -1737,3 +1737,35 @@ html.is-native .portal-shell.teresa-inside .drawer-layer {
   letter-spacing: 0;
   text-transform: none;
 }
+.portal-shell.teresa-inside .avatar img,
+.portal-shell.teresa-inside .profile-avatar img,
+.portal-shell.teresa-inside .member-card .avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  display: block;
+}
+.portal-shell.teresa-inside .photo-field {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.portal-shell.teresa-inside .photo-preview {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.portal-shell.teresa-inside .photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.portal-shell.teresa-inside .photo-clear {
+  border: 0;
+  background: transparent;
+  color: var(--sw-blue);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 4px;
+}
