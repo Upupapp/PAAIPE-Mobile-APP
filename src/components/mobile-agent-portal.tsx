@@ -10,8 +10,11 @@ import {
   Clock3,
   Compass,
   FileText,
+  Files,
   Gift,
   Grid2x2,
+  LayoutTemplate,
+  ListChecks,
   Home,
   Link2,
   LogOut,
@@ -1038,7 +1041,14 @@ const LEARNING_FILES = [
   },
 ] as const;
 
-const FILE_FORMATS = ["All formats", "Slides", "PDF", "Template", "Checklist", "Docs"] as const;
+const FILE_FORMATS = [
+  { label: "All formats", hint: "Every file", icon: Grid2x2 },
+  { label: "Slides", hint: "Decks", icon: Presentation },
+  { label: "PDF", hint: "Documents", icon: FileText },
+  { label: "Template", hint: "Worksheets", icon: LayoutTemplate },
+  { label: "Checklist", hint: "Step lists", icon: ListChecks },
+  { label: "Docs", hint: "Notes", icon: Files },
+] as const;
 
 function LearnView({
   sessions,
@@ -1050,7 +1060,8 @@ function LearnView({
   onOpen: (session: ApiSession) => void;
 }) {
   const [lane, setLane] = useState<"Sessions" | "Micros" | "Playlists" | "Resources">("Sessions");
-  const [fileFormat, setFileFormat] = useState<(typeof FILE_FORMATS)[number]>("All formats");
+  const [fileFormat, setFileFormat] = useState<(typeof FILE_FORMATS)[number]["label"]>("All formats");
+  const [formatsOpen, setFormatsOpen] = useState(false);
   const [library, setLibrary] = useState<"hub" | "recordings" | "slides">("hub");
   const [query, setQuery] = useState("");
   const [watched, setWatched] = useState<Record<string, boolean>>({});
@@ -1124,7 +1135,7 @@ function LearnView({
       <PageTitle
         kicker="Knowledge hub"
         title="Learnings"
-        subtitle="Sessions are longer horizontal recordings. Micros are short vertical videos. Playlists group them. Resources are the files."
+        subtitle="Horizontal sessions, short vertical micros, playlists, and files."
       />
       <label className="search-field">
         <Search />
@@ -1134,13 +1145,14 @@ function LearnView({
           placeholder={lane === "Resources" ? "Search files" : "Search sessions"}
         />
       </label>
-      <div className="filter-pills" aria-label="Learnings">
+      <div className="lane-row" role="tablist" aria-label="Learnings">
         {(["Sessions", "Micros", "Playlists", "Resources"] as const).map((label) => (
           <button
             key={label}
             type="button"
+            role="tab"
             className={lane === label ? "selected" : ""}
-            aria-pressed={lane === label}
+            aria-selected={lane === label}
             onClick={() => setLane(label)}
           >
             {label}
@@ -1187,24 +1199,51 @@ function LearnView({
       )}
       {lane === "Resources" && (
         <>
-          <p className="copy-block">
-            PDFs, slides, templates, checklists, and other files. Recordings stay in Sessions and Micros.
-          </p>
-          <div className="filter-pills" aria-label="File format">
-            {FILE_FORMATS.map((label) => (
-              <button
-                key={label}
-                type="button"
-                className={fileFormat === label ? "selected" : ""}
-                aria-pressed={fileFormat === label}
-                onClick={() => setFileFormat(label)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {LEARNING_FILES.filter((file) => fileFormat === "All formats" || file.format === fileFormat).length ===
-          0 ? (
+          <button className="format-trigger" type="button" onClick={() => setFormatsOpen(true)}>
+            <FileText />
+            <span>
+              <strong>Format</strong>
+              <small>{fileFormat}</small>
+            </span>
+            <ChevronRight />
+          </button>
+          {formatsOpen ? (
+            <div className="format-sheet" role="dialog" aria-modal="true" aria-label="File format">
+              <button className="format-backdrop" type="button" aria-label="Close formats" onClick={() => setFormatsOpen(false)} />
+              <div className="format-panel">
+                <div className="format-panel-head">
+                  <strong>File format</strong>
+                  <button type="button" aria-label="Close" onClick={() => setFormatsOpen(false)}>
+                    <X />
+                  </button>
+                </div>
+                <div className="format-grid">
+                  {FILE_FORMATS.map((format) => {
+                    const Icon = format.icon;
+                    const selected = fileFormat === format.label;
+                    return (
+                      <button
+                        key={format.label}
+                        type="button"
+                        className={selected ? "selected" : ""}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setFileFormat(format.label);
+                          setFormatsOpen(false);
+                        }}
+                      >
+                        <Icon />
+                        <strong>{format.label}</strong>
+                        <span>{format.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {LEARNING_FILES.filter((file) => fileFormat === "All formats" || file.format === fileFormat)
+            .length === 0 ? (
             <div className="empty-note">
               <strong>No files yet</strong>
               <p>Nothing in this format yet. Choose another filter, or check back when a file is added.</p>
@@ -1236,14 +1275,6 @@ function LearnView({
           <span>
             <strong>All recordings</strong>
             <small>Watch, slides, and mark as watched</small>
-          </span>
-          <ChevronRight />
-        </button>
-        <button type="button" onClick={() => setLane("Resources")}>
-          <FileText />
-          <span>
-            <strong>Resources</strong>
-            <small>PDFs, slides, and other files</small>
           </span>
           <ChevronRight />
         </button>

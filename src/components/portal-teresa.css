@@ -164,6 +164,129 @@
   font-size: 14px;
   min-width: 0;
 }
+.portal-shell.teresa-inside .lane-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0;
+}
+.portal-shell.teresa-inside .lane-row button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 4px;
+  border: 1px solid var(--sw-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--sw-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.portal-shell.teresa-inside .lane-row button.selected {
+  background: var(--sw-blue);
+  border-color: var(--sw-blue);
+  color: #fff;
+}
+.portal-shell.teresa-inside .format-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px solid var(--sw-line);
+  border-radius: 18px;
+  background: #fff;
+  text-align: left;
+  color: inherit;
+}
+.portal-shell.teresa-inside .format-trigger svg {
+  width: 18px;
+  height: 18px;
+  color: var(--sw-blue);
+}
+.portal-shell.teresa-inside .format-trigger span {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+.portal-shell.teresa-inside .format-trigger strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.portal-shell.teresa-inside .format-trigger small {
+  font-size: 12px;
+  color: var(--sw-muted);
+}
+.portal-shell.teresa-inside .format-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  align-items: end;
+}
+.portal-shell.teresa-inside .format-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(16, 32, 64, 0.42);
+}
+.portal-shell.teresa-inside .format-panel {
+  position: relative;
+  margin: 0 auto;
+  width: min(390px, 100%);
+  padding: 14px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+  border-radius: 24px 24px 0 0;
+  background: #f4f7fd;
+}
+.portal-shell.teresa-inside .format-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.portal-shell.teresa-inside .format-panel-head button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+}
+.portal-shell.teresa-inside .format-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.portal-shell.teresa-inside .format-grid button {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid var(--sw-line);
+  border-radius: 18px;
+  background: #fff;
+  text-align: left;
+  color: inherit;
+}
+.portal-shell.teresa-inside .format-grid button svg {
+  width: 22px;
+  height: 22px;
+  color: var(--sw-blue);
+}
+.portal-shell.teresa-inside .format-grid button strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.portal-shell.teresa-inside .format-grid button span {
+  font-size: 12px;
+  color: var(--sw-muted);
+}
+.portal-shell.teresa-inside .format-grid button.selected {
+  border-color: var(--sw-blue);
+  background: #e8f0ff;
+}
 .portal-shell.teresa-inside .filter-pills {
   gap: 8px;
   margin: 0;
