@@ -519,6 +519,9 @@
   font: inherit;
   cursor: pointer;
 }
+.portal-shell.teresa-inside .teresa-event-card[role="button"] {
+  cursor: pointer;
+}
 .portal-shell.teresa-inside .back-link {
   display: inline-flex;
   align-items: center;

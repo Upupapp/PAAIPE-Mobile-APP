@@ -38,15 +38,13 @@ import {
   type ApiSession,
   type DirectoryMember,
 } from "../lib/api";
-import { timeOfDayGreeting, type DisplayIdentity } from "../lib/profile-display";
+import { type DisplayIdentity } from "../lib/profile-display";
 import { openExternalUrl } from "../lib/legal-links";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
 import { DataState, MembershipPanel, ProfileGate } from "./membership-panel";
 import { AppHaptics } from "../lib/app-haptics";
 import {
-  AI_EXCHANGE,
   BENEFITS_INTRO,
-  EVENT_TYPES,
   MEMBER_BENEFITS,
   PARTNER_BENEFIT_DISCLAIMER,
   PROGRAM_NOTES,
@@ -446,9 +444,11 @@ export function MobileAgentPortal() {
               events={events}
               sessions={sessions}
               eventData={eventData}
-              sessionData={sessionData}
               onExplore={() => selectBranch("Learn")}
               onEvent={() => selectBranch("Events")}
+              onBenefits={() => select("Benefits")}
+              onProfile={() => select("Profile")}
+              onPrograms={() => select("Programs")}
               onSession={openSession}
             />
           )}
@@ -500,7 +500,11 @@ export function MobileAgentPortal() {
             <ProgramsView onEvents={() => selectBranch("Events")} onResources={() => select("Resources")} />
           )}
           {active === "Session" && (
-            <SessionView session={selectedSession} onResources={() => select("Resources")} />
+            <SessionView
+              session={selectedSession}
+              onResources={() => select("Resources")}
+              onEvents={() => selectBranch("Events")}
+            />
           )}
         </main>
 
@@ -764,26 +768,47 @@ function BannerSlot({
   );
 }
 
+const HOME_NEWS = [
+  {
+    title: "October AI Exchange: save the date",
+    copy: "Tuesday, October 13, 8:00 PM PHT. Topic and speaker revealed soon.",
+    when: "Today",
+  },
+  {
+    title: "September recap is up",
+    copy: "Sven Bally's recordings and Q&A follow-ups are in Learnings.",
+    when: "Yesterday",
+  },
+  {
+    title: "The program roadmap is out",
+    copy: "AI Safari, Build Nights, Certification Pathways and more, in order.",
+    when: "Sep 14",
+  },
+] as const;
+
 function HomeView({
   identity,
   events,
   sessions,
   eventData,
-  sessionData,
   onExplore,
   onEvent,
+  onBenefits,
+  onProfile,
+  onPrograms,
   onSession,
 }: {
   identity: DisplayIdentity;
   events: ApiEvent[];
   sessions: ApiSession[];
   eventData: Loadable<ApiEvent[]>;
-  sessionData: Loadable<ApiSession[]>;
   onExplore: () => void;
   onEvent: () => void;
+  onBenefits: () => void;
+  onProfile: () => void;
+  onPrograms: () => void;
   onSession: (session: ApiSession) => void;
 }) {
-  const greet = timeOfDayGreeting();
   const upcoming =
     events.find((e) => e.status === "registration_open") ||
     events.find((e) => e.status !== "held" && e.status !== "cancelled") ||
@@ -793,10 +818,8 @@ function HomeView({
     <div className="screen-stack animate-fade-in">
       <section className="welcome-panel">
         <div className="welcome-copy">
-          <h1>
-            {greet}, {identity.firstName}.
-          </h1>
-          <p>Your gateway to the Philippine AI community.</p>
+          <h1>Welcome back, {identity.firstName}.</h1>
+          <p>{identity.membershipLabel}</p>
         </div>
         <div className="identity-strip">
           <div>
@@ -830,61 +853,140 @@ function HomeView({
       <section className="section-block">
         <div className="section-heading">
           <div>
-            <h2>Explore learning</h2>
+            <h2>Next up</h2>
           </div>
-          <button className="text-link" type="button" onClick={onExplore}>
-            See all
+          <button className="text-link" type="button" onClick={onEvent}>
+            Events
           </button>
         </div>
-        <DataState result={sessionData} label="Sessions">
-          {continueSession ? (
-            <button
-              className="learning-feature"
-              onClick={() => continueSession && onSession(continueSession)}
-            >
-              <div className="play-disc">
-                <Play fill="currentColor" />
+        <DataState result={eventData} label="Events">
+          {upcoming ? (
+            <button className="event-feature soft-event" type="button" onClick={onEvent}>
+              <div className="event-hero-wash">
+                <span className="event-tag">{upcoming.format || "Online"}</span>
+                <strong className="event-hero-title">{upcoming.series || "AI Exchange"}</strong>
               </div>
-              <div className="learning-copy">
-                <span>Session</span>
-                <strong>{continueSession.title || "Learning session"}</strong>
-                <span className="feature-link">
-                  Open session <ChevronRight />
-                </span>
+              <div className="event-body">
+                <strong>{upcoming.title || "PAAIPE AI Exchange"}</strong>
+                <small>
+                  {upcoming.topic || upcoming.description || "Topic and speaker to be revealed soon"}
+                </small>
               </div>
             </button>
           ) : (
-            <div className="empty-note">No published sessions available yet.</div>
+            <div className="empty-note">No upcoming Exchange is published yet.</div>
           )}
         </DataState>
+      </section>
+
+      <div className="settings-list">
+        <button type="button" onClick={onBenefits}>
+          <Gift />
+          <span>
+            <strong>See benefits</strong>
+            <small>Exclusive benefits for PAAIPE Agents · coming soon</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button type="button" onClick={onExplore}>
+          <Play />
+          <span>
+            <strong>Open Learnings</strong>
+            <small>
+              {continueSession
+                ? continueSession.title || "Published sessions"
+                : "Sessions, micros, and playlists"}
+            </small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button type="button" onClick={onProfile}>
+          <UserRound />
+          <span>
+            <strong>Complete profile</strong>
+            <small>Add your role and sector so other Agents can find you</small>
+          </span>
+          <ChevronRight />
+        </button>
+      </div>
+
+      <section className="section-block">
+        <div className="section-heading">
+          <div>
+            <h2>Latest from PAAIPE</h2>
+          </div>
+          <button className="text-link" type="button" onClick={onExplore}>
+            Learnings
+          </button>
+        </div>
+        <div className="resource-list">
+          {HOME_NEWS.map((item) => (
+            <article className="resource-card" key={item.title}>
+              <div>
+                <strong>{item.title}</strong>
+                <span>
+                  {item.when} · {item.copy}
+                </span>
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="section-block">
         <div className="section-heading">
           <div>
-            <h2>Upcoming event</h2>
+            <h2>Your Agent stats</h2>
           </div>
-          <span className="meta-date">{upcoming?.date || "—"}</span>
         </div>
-        <DataState result={eventData} label="Events">
-          {upcoming ? (
-            <button className="event-feature soft-event" onClick={onEvent}>
-              <div className="event-hero-wash">
-                <span className="event-tag">
-                  {upcoming.format || "Online"}
-                  {upcoming.series ? ` · ${upcoming.series}` : ""}
-                </span>
-                <strong className="event-hero-title">{upcoming.series || "Event"}</strong>
-              </div>
-              <div className="event-body">
-                <strong>{upcoming.title || "PAAIPE event"}</strong>
-                <small>{upcoming.description || upcoming.topic || ""}</small>
-              </div>
-            </button>
-          ) : (
-            <div className="empty-note">No upcoming events right now.</div>
-          )}
-        </DataState>
+        <div className="program-list">
+          <article className="program-card">
+            <div>
+              <strong>Exchanges attended</strong>
+              <p>Nothing to show yet. Attendance is counted after each Exchange.</p>
+            </div>
+          </article>
+          <article className="program-card">
+            <div>
+              <strong>Streak</strong>
+              <p>Nothing to show yet.</p>
+            </div>
+          </article>
+          <article className="program-card">
+            <div>
+              <strong>Badges</strong>
+              <p>0 badges yet. Your first arrives after you attend an Exchange.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="section-block">
+        <div className="section-heading">
+          <div>
+            <h2>Programs for you</h2>
+          </div>
+          <button className="text-link" type="button" onClick={onPrograms}>
+            All programs
+          </button>
+        </div>
+        <div className="program-list">
+          <article className="program-card">
+            <div>
+              <strong>AI Safari</strong>
+              <p>Join the interest list for the first field trip.</p>
+            </div>
+            <span className="state">Join list</span>
+          </article>
+          <article className="program-card">
+            <div>
+              <strong>Regional Circles</strong>
+              <p>Pick your circle when they open.</p>
+            </div>
+            <span className="state">Notify me</span>
+          </article>
+        </div>
+        <div className="empty-note">Interest lists are not connected in this build.</div>
       </section>
     </div>
   );
@@ -901,18 +1003,82 @@ function LearnView({
   onOpen: (session: ApiSession) => void;
   onResources: () => void;
 }) {
+  const [lane, setLane] = useState<"Sessions" | "Micros" | "Playlists">("Sessions");
+  const [library, setLibrary] = useState<"hub" | "recordings" | "slides">("hub");
   const [query, setQuery] = useState("");
+  const [watched, setWatched] = useState<Record<string, boolean>>({});
   const shown = sessions.filter((item) =>
     (item.title || "").toLowerCase().includes(query.toLowerCase()),
   );
+  if (library === "slides") {
+    return (
+      <div className="screen-stack animate-fade-in page-screen">
+        <button className="text-link back-link" type="button" onClick={() => setLibrary("hub")}>
+          <ArrowLeft /> Learnings
+        </button>
+        <PageTitle
+          kicker="Member materials"
+          title="Speaker's slides"
+          subtitle="Viewed inside the PAAIPE member portal. Please don't re-post outside the association."
+        />
+        <div className="empty-note">
+          <strong>The deck opens in a new window</strong>
+          <p>
+            No slide deck is published for this session. Gamma decks open outside the page when a
+            speaker shares one.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (library === "recordings") {
+    return (
+      <div className="screen-stack animate-fade-in page-screen">
+        <button className="text-link back-link" type="button" onClick={() => setLibrary("hub")}>
+          <ArrowLeft /> Library home
+        </button>
+        <PageTitle
+          kicker="Learnings"
+          title="All recordings"
+          subtitle="Published sessions, in the order set for members."
+        />
+        <DataState result={loadState} label="Sessions">
+          {shown.length === 0 ? (
+            <div className="empty-note">No sessions published yet.</div>
+          ) : (
+            shown.map((item) => (
+              <article className="program-card" key={item.id}>
+                <div>
+                  <strong>{item.title || "Session"}</strong>
+                  <p>{item.description || "Recorded session"}</p>
+                </div>
+                <button className="state on" type="button" onClick={() => onOpen(item)}>
+                  Watch
+                </button>
+              </article>
+            ))
+          )}
+        </DataState>
+        {shown.map((item) => (
+          <button
+            key={`${item.id}-watched`}
+            className="portal-link"
+            type="button"
+            onClick={() => setWatched((current) => ({ ...current, [item.id]: !current[item.id] }))}
+          >
+            {watched[item.id] ? "Watched on this device" : "Mark as watched"}
+          </button>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="screen-stack animate-fade-in page-screen">
       <PageTitle
         kicker="Knowledge hub"
-        title="Learn"
-        subtitle="Build practical AI capability, one session at a time."
+        title="Learnings"
+        subtitle="Sessions, micros, and playlists published for members."
       />
-
       <label className="search-field">
         <Search />
         <input
@@ -921,34 +1087,87 @@ function LearnView({
           placeholder="Search sessions"
         />
       </label>
-      <div className="filter-pills" aria-label="Learn filter">
-        <span className="filter-chip selected">Sessions</span>
+      <div className="filter-pills" aria-label="Learnings">
+        {(["Sessions", "Micros", "Playlists"] as const).map((label) => (
+          <button
+            key={label}
+            type="button"
+            className={lane === label ? "selected" : ""}
+            aria-pressed={lane === label}
+            onClick={() => setLane(label)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {lane === "Sessions" && (
+        <DataState result={loadState} label="Sessions">
+          {shown.length === 0 ? (
+            <div className="empty-note">
+              {query
+                ? "No sessions match your search."
+                : "No sessions published yet. Published sessions appear here in the order set for Learnings. Calendar and registration live under Events."}
+            </div>
+          ) : (
+            <div className="resource-list">
+              {shown.map((item, index) => (
+                <button className="resource-card" key={item.id} type="button" onClick={() => onOpen(item)}>
+                  <div className={`resource-icon tone-${index % 3}`}>
+                    <Play fill="currentColor" />
+                  </div>
+                  <div>
+                    <strong>{item.title || "Session"}</strong>
+                    <span>{item.description || "Recorded session"}</span>
+                  </div>
+                  <ChevronRight />
+                </button>
+              ))}
+            </div>
+          )}
+        </DataState>
+      )}
+      {lane === "Micros" && (
+        <div className="empty-note">
+          <strong>No micros yet</strong>
+          <p>Short vertical clips appear here when published in Learnings. No placeholder reels.</p>
+        </div>
+      )}
+      {lane === "Playlists" && (
+        <div className="empty-note">
+          <strong>No playlists published yet</strong>
+          <p>Published playlists from the library will appear here.</p>
+        </div>
+      )}
+      <div className="settings-list">
+        <button type="button" onClick={() => setLibrary("recordings")}>
+          <Play />
+          <span>
+            <strong>All recordings</strong>
+            <small>Watch, slides, and mark as watched</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button type="button" onClick={() => setLibrary("slides")}>
+          <Presentation />
+          <span>
+            <strong>Speaker's slides</strong>
+            <small>Opens when a deck is shared</small>
+          </span>
+          <ChevronRight />
+        </button>
         <button type="button" onClick={onResources}>
-          Resources
+          <FileText />
+          <span>
+            <strong>Resources</strong>
+            <small>Guides and references</small>
+          </span>
+          <ChevronRight />
         </button>
       </div>
-      <DataState result={loadState} label="Sessions">
-        {shown.length === 0 ? (
-          <div className="empty-note">
-            {query ? "No sessions match your search." : "No published sessions available yet."}
-          </div>
-        ) : (
-          <div className="resource-list">
-            {shown.map((item, index) => (
-              <button className="resource-card" key={item.id} onClick={() => onOpen(item)}>
-                <div className={`resource-icon tone-${index % 3}`}>
-                  <Play fill="currentColor" />
-                </div>
-                <div>
-                  <strong>{item.title || "Session"}</strong>
-                  <span>{item.description || "Recorded session"}</span>
-                </div>
-                <ChevronRight />
-              </button>
-            ))}
-          </div>
-        )}
-      </DataState>
+      <div className="empty-note">
+        Session materials are shared with PAAIPE members under the speaker's permission. Please keep
+        them inside the association.
+      </div>
     </div>
   );
 }
@@ -961,57 +1180,55 @@ function EventsView({
   loadState: Loadable<ApiEvent[]>;
 }) {
   const [period, setPeriod] = useState<"Upcoming" | "Past">("Upcoming");
-  const [showExchange, setShowExchange] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const list = events.filter((event) =>
     period === "Past" ? event.status === "held" : event.status !== "held",
   );
-  if (showExchange) {
+  const selected = events.find((event) => event.id === selectedId) || null;
+  if (selected) {
+    const held = selected.status === "held";
     return (
       <div className="screen-stack animate-fade-in page-screen">
-        <button className="text-link back-link" type="button" onClick={() => setShowExchange(false)}>
+        <button className="text-link back-link" type="button" onClick={() => setSelectedId(null)}>
           <ArrowLeft /> Events
         </button>
-        <PageTitle kicker={AI_EXCHANGE.label} title={AI_EXCHANGE.title} subtitle={AI_EXCHANGE.subtitle} />
-        <p className="copy-block">{AI_EXCHANGE.description}</p>
-        <ul className="schedule-list">
-          {AI_EXCHANGE.schedule.map((item) => (
-            <li key={item}>{item}</li>
+        <PageTitle
+          kicker={held ? "Recap" : "Upcoming"}
+          title={selected.title || "AI Exchange"}
+          subtitle={selected.topic || selected.description || "Topic to be announced"}
+        />
+        <div className="event-meta">
+          <span>
+            <CalendarDays />
+            {selected.date || "Date to be announced"}
+          </span>
+          {selected.startTime && (
+            <span>
+              <Clock3 />
+              {selected.startTime}
+              {selected.endTime ? ` – ${selected.endTime}` : ""}
+            </span>
+          )}
+        </div>
+        <div className="program-list">
+          {[
+            ["Session recording", held ? "Members only · Watch in Learnings" : "Not published yet"],
+            ["Speaker's slides", "As presented, shared with the speaker's permission"],
+            ["Feedback", "Opens after the session, for people who registered"],
+            ["Certificate", "After registration and feedback"],
+            ["Q&A follow-ups", "Questions the speaker answered after the session"],
+          ].map(([title, copy]) => (
+            <article className="program-card" key={title}>
+              <div>
+                <strong>{title}</strong>
+                <p>{copy}</p>
+              </div>
+              <span className="state">{held && title === "Session recording" ? "Watch" : "Not yet"}</span>
+            </article>
           ))}
-        </ul>
-        <h2 className="subheading">Public agenda</h2>
-        <ol className="agenda-list">
-          {AI_EXCHANGE.agenda.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ol>
-        <article className="program-card">
-          <div>
-            <strong>{AI_EXCHANGE.formatHeading}</strong>
-            <p>{AI_EXCHANGE.formatBody}</p>
-          </div>
-        </article>
-        <article className="program-card">
-          <div>
-            <strong>{AI_EXCHANGE.audienceHeading}</strong>
-            <p>{AI_EXCHANGE.audienceIntro}</p>
-            <ul className="plain-list">
-              {AI_EXCHANGE.audiences.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        </article>
-        <article className="program-card">
-          <div>
-            <strong>{AI_EXCHANGE.afterwardsHeading}</strong>
-            <p>{AI_EXCHANGE.afterwardsBody}</p>
-          </div>
-        </article>
-        <div className="member-lock">
-          <span className="soft-chip">{AI_EXCHANGE.lockLabel}</span>
-          <strong>{AI_EXCHANGE.lockHeading}</strong>
-          <p>{AI_EXCHANGE.lockBody}</p>
-          <p>{AI_EXCHANGE.accessNote}</p>
+        </div>
+        <div className="empty-note">
+          Join links, calendar files, and registration are not connected in this build.
         </div>
       </div>
     );
@@ -1021,31 +1238,8 @@ function EventsView({
       <PageTitle
         kicker="Community calendar"
         title="Events"
-        subtitle="Meet the builders shaping AI across the Philippines."
+        subtitle="Upcoming and past Exchanges for members."
       />
-      <button className="program-card exchange-card" type="button" onClick={() => setShowExchange(true)}>
-        <div>
-          <span className="soft-chip">Members only</span>
-          <strong>{AI_EXCHANGE.title}</strong>
-          <p>{AI_EXCHANGE.subtitle}</p>
-          <span className="feature-link">
-            Series detail <ChevronRight />
-          </span>
-        </div>
-      </button>
-      <h2 className="subheading">Event types</h2>
-      <p className="copy-block">Descriptions of the kinds of sessions PAAIPE runs. These are not dated events.</p>
-      <div className="program-list">
-        {EVENT_TYPES.map((item) => (
-          <article className="program-card" key={item.name}>
-            <div>
-              <strong>{item.name}</strong>
-              <p>{item.description}</p>
-            </div>
-          </article>
-        ))}
-      </div>
-      <h2 className="subheading">Published events</h2>
       <div className="filter-pills" aria-label="Event filter">
         {(["Upcoming", "Past"] as const).map((label) => (
           <button
@@ -1070,7 +1264,9 @@ function EventsView({
           <div className="empty-note">No {period.toLowerCase()} events right now.</div>
         ) : (
           list.map((event) => (
-            <article className="teresa-event-card" key={event.id}>
+            <article className="teresa-event-card" key={event.id} onClick={() => setSelectedId(event.id)} role="button" tabIndex={0} onKeyDown={(eventKey) => {
+              if (eventKey.key === "Enter") setSelectedId(event.id);
+            }}>
               <div className="event-poster">
                 {event.coverUrl ? (
                   <img src={event.coverUrl} alt="" loading="lazy" />
@@ -1099,13 +1295,22 @@ function EventsView({
                 )}
               </div>
               {(event.description || event.topic) && <p>{event.description || event.topic}</p>}
-              <div className="empty-note">
-                Registration and calendar reminders are not available in this build.
-              </div>
+              <div className="empty-note">Open this event for the recap, recording, slides, and certificate.</div>
             </article>
           ))
         )}
       </DataState>
+      <section className="section-block">
+        <div className="section-heading">
+          <div>
+            <h2>Your attendance</h2>
+          </div>
+        </div>
+        <div className="empty-note">
+          Attendance is taken from the Zoom register after each Exchange. Nothing to show yet.
+          Register for an Exchange and it will be counted here.
+        </div>
+      </section>
     </div>
   );
 }
@@ -1465,9 +1670,11 @@ function ProgramsView({ onEvents, onResources }: { onEvents: () => void; onResou
 function SessionView({
   session,
   onResources,
+  onEvents,
 }: {
   session: ApiSession | null;
   onResources: () => void;
+  onEvents: () => void;
 }) {
   const videoUrl =
     session?.youtubeUrl ||
@@ -1477,37 +1684,50 @@ function SessionView({
   return (
     <div className="screen-stack animate-fade-in page-screen session-screen">
       <PageTitle
-        kicker="Learning library"
+        kicker="Learnings · Recordings"
         title={session?.title || "Session"}
-        subtitle={session?.description || "Session recording and materials."}
+        subtitle={session?.description || "Members-only recording."}
       />
       <div className="session-player">
-        <img src={session?.posterUrl || eventCover} alt="Session cover" />
-        {videoUrl && (
-          <button
-            className="session-watch"
-            type="button"
-            onClick={() => void openExternalUrl(videoUrl)}
-          >
+        <img src={session?.posterUrl || eventCover} alt="" />
+        {videoUrl ? (
+          <button className="session-watch" type="button" onClick={() => void openExternalUrl(videoUrl)}>
             <Play fill="currentColor" />
-            Watch session
+            Watch
           </button>
-        )}
+        ) : null}
       </div>
-      {!videoUrl && (
-        <div className="empty-note">A recording is not available for this session yet.</div>
-      )}
-      <h2 className="subheading">Session materials</h2>
+      {!videoUrl && <div className="empty-note">A recording is not available for this session yet.</div>}
+      <h2 className="subheading">Speaker</h2>
+      <article className="program-card">
+        <div>
+          <strong>Speaker</strong>
+          <p>The speaker name is shown when the published session includes one.</p>
+        </div>
+      </article>
+      <h2 className="subheading">Chapters</h2>
+      <div className="empty-note">No chapters are published for this recording yet.</div>
+      <h2 className="subheading">Q&A follow-ups</h2>
+      <div className="empty-note">Questions the speaker answered after the session will appear here.</div>
       <div className="settings-list">
-        <button onClick={onResources}>
+        <button type="button" onClick={onResources}>
           <Presentation />
           <span>
             <strong>Resources</strong>
-            <small>Browse slides, guides and references</small>
+            <small>Slides and guides for this session</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button type="button" onClick={onEvents}>
+          <CalendarDays />
+          <span>
+            <strong>Next Exchange</strong>
+            <small>Topic to be announced · open Events</small>
           </span>
           <ChevronRight />
         </button>
       </div>
+      <div className="empty-note">Report a playback problem from the association if the recording will not play.</div>
     </div>
   );
 }
