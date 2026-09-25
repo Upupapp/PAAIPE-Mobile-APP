@@ -17,6 +17,7 @@ import {
   LayoutTemplate,
   ListChecks,
   Home,
+  ImagePlus,
   Link2,
   LogOut,
   Mail,
@@ -74,7 +75,8 @@ type Detail =
   | "Programs"
   | "Session"
   | "EditProfile"
-  | "PublicProfile";
+  | "PublicProfile"
+  | "MemberProfile";
 type View = Branch | Detail | "Feed";
 
 const branches: Array<{ label: Branch; icon: typeof Home; slot: number }> = [
@@ -120,6 +122,7 @@ const detailTitles: Record<Detail, string> = {
   Session: "Session",
   EditProfile: "Edit profile",
   PublicProfile: "Your public profile",
+  MemberProfile: "Profile",
 };
 
 const accountMenu: Array<{ label: string; view: View; icon: typeof Home }> = [
@@ -190,6 +193,14 @@ const PREVIEW_IDENTITY: DisplayIdentity = {
   profileSyncPending: false,
 };
 
+const PREVIEW_DIRECTORY: DirectoryMember[] = [
+  { uid: "d-ava", name: "Ava Cruz", initials: "AC", agentNumber: "0142", role: "Product lead, Northwind" },
+  { uid: "d-marco", name: "Marco Reyes", initials: "MR", agentNumber: "0098", role: "ML engineer" },
+  { uid: "d-liza", name: "Liza Tan", initials: "LT", agentNumber: "0211", role: "Data scientist" },
+  { uid: "d-jomar", name: "Jomar Dela Cruz", initials: "JD", agentNumber: "0176", role: "Founder, Kalibrr AI" },
+  { uid: "d-nina", name: "Nina Villanueva", initials: "NV", agentNumber: "0203", role: "AI researcher" },
+];
+
 export function MobileAgentPortal() {
   const { ready, user, identity, profileState, profileSyncPending, signOut, refreshProfile } = useAuth();
   const [publicCard, setPublicCard] = useState<PublicCard | null>(() => readPublicCard());
@@ -207,7 +218,9 @@ export function MobileAgentPortal() {
   );
   const events = eventData.data ?? [];
   const sessions = sessionData.data ?? [];
-  const directory = directoryData.data?.members ?? [];
+  const directory = preview && !signedIn ? PREVIEW_DIRECTORY : directoryData.data?.members ?? [];
+  const directoryTotal =
+    preview && !signedIn ? PREVIEW_DIRECTORY.length : directoryData.data?.total ?? 0;
   const [signOutError, setSignOutError] = useState("");
   const logout = async () => {
     if (preview && !user) {
@@ -224,6 +237,7 @@ export function MobileAgentPortal() {
     }
   };
   const [selectedSession, setSelectedSession] = useState<ApiSession | null>(null);
+  const [selectedMember, setSelectedMember] = useState<DirectoryMember | null>(null);
   const [learnLane, setLearnLane] = useState<"Sessions" | "Micros" | "Playlists" | "Resources">("Sessions");
   const [active, setActive] = useState<View>("Home");
   const [activeBranch, setActiveBranch] = useState<Branch>("Home");
@@ -349,15 +363,17 @@ export function MobileAgentPortal() {
   const classicDetailParent: View =
     active === "Resources" || active === "Session"
       ? "Learn"
-      : active === "Certificates" ||
-          active === "Organization" ||
-          active === "Benefits" ||
-          active === "Directory" ||
-          active === "Programs" ||
-          active === "EditProfile" ||
-          active === "PublicProfile"
-        ? "Profile"
-        : activeBranch;
+      : active === "MemberProfile"
+        ? "Directory"
+        : active === "Certificates" ||
+            active === "Organization" ||
+            active === "Benefits" ||
+            active === "Directory" ||
+            active === "Programs" ||
+            active === "EditProfile" ||
+            active === "PublicProfile"
+          ? "Profile"
+          : activeBranch;
   /** Sheet-opened destinations pop back to the last branch; Profile tools keep classic parents. */
   const detailParent: View =
     fromSheet &&
@@ -566,28 +582,51 @@ export function MobileAgentPortal() {
           {active === "Feed" && (
             <FeedView author={displayName} initials={initials} />
           )}
+          {active === "MemberProfile" && (
+            <MemberProfileView member={selectedMember} />
+          )}
           {active === "Directory" && (
             <>
-              <DataState result={directoryData} label="Directory">
-                <DirectoryView members={directory} total={directoryData.data?.total ?? 0} />
-              </DataState>
-              <div className="directory-pagination">
-                <button
-                  disabled={directoryOffset === 0 || directoryData.state === "loading"}
-                  onClick={() => setDirectoryOffset((n) => Math.max(0, n - 50))}
-                >
-                  Previous page
-                </button>
-                <button
-                  disabled={
-                    directoryData.state !== "ready" ||
-                    directoryOffset + directory.length >= (directoryData.data?.total ?? 0)
-                  }
-                  onClick={() => setDirectoryOffset((n) => n + 50)}
-                >
-                  Next page
-                </button>
-              </div>
+              {preview && !signedIn ? (
+                <DirectoryView
+                  members={directory}
+                  total={directoryTotal}
+                  onOpen={(m) => {
+                    setSelectedMember(m);
+                    select("MemberProfile");
+                  }}
+                />
+              ) : (
+                <>
+                  <DataState result={directoryData} label="Directory">
+                    <DirectoryView
+                      members={directory}
+                      total={directoryTotal}
+                      onOpen={(m) => {
+                        setSelectedMember(m);
+                        select("MemberProfile");
+                      }}
+                    />
+                  </DataState>
+                  <div className="directory-pagination">
+                    <button
+                      disabled={directoryOffset === 0 || directoryData.state === "loading"}
+                      onClick={() => setDirectoryOffset((n) => Math.max(0, n - 50))}
+                    >
+                      Previous page
+                    </button>
+                    <button
+                      disabled={
+                        directoryData.state !== "ready" ||
+                        directoryOffset + directory.length >= (directoryData.data?.total ?? 0)
+                      }
+                      onClick={() => setDirectoryOffset((n) => n + 50)}
+                    >
+                      Next page
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
           {active === "Benefits" && <BenefitsView />}
@@ -1651,16 +1690,29 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
   const [sharePost, setSharePost] = useState<FeedPost | null>(null);
   const [reel, setReel] = useState<FeedReel | null>(null);
   const [composerActive, setComposerActive] = useState(false);
+  const [attachment, setAttachment] = useState<FeedMedia | null>(null);
   const draftRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const autoGrow = (el: HTMLTextAreaElement) => {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   };
 
+  const pickFile = (file: File | undefined) => {
+    if (!file) return;
+    const src = URL.createObjectURL(file);
+    setAttachment(
+      file.type.startsWith("video")
+        ? { kind: "video", src, poster: "" }
+        : { kind: "image", src, alt: "Your upload" },
+    );
+    setComposerActive(true);
+  };
+
   const publish = () => {
     const body = draft.trim();
-    if (!body) return;
+    if (!body && !attachment) return;
     setPosts((current) => [
       {
         id: `local-${Date.now()}`,
@@ -1669,6 +1721,7 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
         initials,
         time: "now",
         body,
+        ...(attachment ? { media: attachment } : {}),
         likes: 0,
         liked: false,
         comments: [],
@@ -1676,7 +1729,9 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
       ...current,
     ]);
     setDraft("");
+    setAttachment(null);
     setComposerActive(false);
+    if (fileRef.current) fileRef.current.value = "";
     if (draftRef.current) draftRef.current.style.height = "auto";
   };
 
@@ -1723,7 +1778,7 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
   return (
     <div className="screen-stack animate-fade-in page-screen feed-screen">
       <form
-        className={composerActive || draft ? "feed-composer is-active" : "feed-composer"}
+        className={composerActive || draft || attachment ? "feed-composer is-active" : "feed-composer"}
         onSubmit={(event) => {
           event.preventDefault();
           publish();
@@ -1740,15 +1795,50 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
             }}
             onFocus={() => setComposerActive(true)}
             onBlur={() => {
-              if (!draft.trim()) setComposerActive(false);
+              if (!draft.trim() && !attachment) setComposerActive(false);
             }}
             placeholder="Share something with members"
             rows={1}
           />
         </div>
-        {composerActive || draft ? (
+        {attachment ? (
+          <div className="composer-attachment">
+            {attachment.kind === "image" ? (
+              <img src={attachment.src} alt="" />
+            ) : (
+              <video src={attachment.src} controls playsInline />
+            )}
+            <button
+              type="button"
+              className="composer-remove icon-button"
+              aria-label="Remove attachment"
+              onClick={() => {
+                setAttachment(null);
+                if (fileRef.current) fileRef.current.value = "";
+              }}
+            >
+              <X />
+            </button>
+          </div>
+        ) : null}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,video/*"
+          hidden
+          onChange={(event) => pickFile(event.target.files?.[0])}
+        />
+        {composerActive || draft || attachment ? (
           <div className="feed-composer-actions">
-            <button type="submit" disabled={!draft.trim()}>
+            <button
+              type="button"
+              className="composer-media"
+              onClick={() => fileRef.current?.click()}
+            >
+              <ImagePlus />
+              Photo/Video
+            </button>
+            <button type="submit" disabled={!draft.trim() && !attachment}>
               Post
             </button>
           </div>
@@ -2162,7 +2252,15 @@ function PublicProfileView({ identity, card }: { identity: DisplayIdentity; card
   );
 }
 
-function DirectoryView({ members, total }: { members: DirectoryMember[]; total: number }) {
+function DirectoryView({
+  members,
+  total,
+  onOpen,
+}: {
+  members: DirectoryMember[];
+  total: number;
+  onOpen: (member: DirectoryMember) => void;
+}) {
   const [query, setQuery] = useState("");
   const shown = members.filter((m) =>
     (m.name + (m.role || "")).toLowerCase().includes(query.toLowerCase()),
@@ -2192,16 +2290,56 @@ function DirectoryView({ members, total }: { members: DirectoryMember[]; total: 
       ) : (
         <div className="member-list">
           {shown.map((m) => (
-            <article className="member-card" key={m.uid}>
+            <button className="member-card" type="button" key={m.uid} onClick={() => onOpen(m)}>
               <div className="avatar">{m.initials}</div>
               <div>
                 <strong>{m.name}</strong>
-                <span>{m.agentNumber ? `Agent ${m.agentNumber}` : "Confirmed Agent"}</span>
+                <span>{m.role || (m.agentNumber ? `Agent ${m.agentNumber}` : "Confirmed Agent")}</span>
               </div>
-            </article>
+              <ChevronRight />
+            </button>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function MemberProfileView({ member }: { member: DirectoryMember | null }) {
+  if (!member) {
+    return (
+      <div className="screen-stack animate-fade-in page-screen">
+        <div className="empty-note">Select a member from the directory to view their profile.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="screen-stack animate-fade-in page-screen">
+      <section className="profile-hero public-card">
+        <div className="avatar profile-avatar">{member.initials}</div>
+        <h1>{member.name}</h1>
+        {member.role ? <p className="public-headline">{member.role}</p> : null}
+        <span className="membership-pill status-agent">
+          <i aria-hidden="true" />
+          Confirmed Agent
+        </span>
+        {member.agentNumber ? <p>Agent {member.agentNumber}</p> : null}
+      </section>
+      <article className="program-card">
+        <div>
+          <strong>About</strong>
+          <p>This member has not added an introduction yet.</p>
+        </div>
+      </article>
+      <article className="program-card">
+        <div>
+          <strong>Work</strong>
+          <p>{member.role || "No work details shared yet."}</p>
+        </div>
+      </article>
+      <div className="empty-note">
+        Member profiles show what each Agent chooses to share in the directory.
+      </div>
     </div>
   );
 }
