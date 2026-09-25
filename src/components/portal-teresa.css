@@ -1321,3 +1321,68 @@ html.is-native .portal-shell.teresa-inside .drawer-layer {
 .portal-shell.teresa-inside .program-card .state {
   flex-shrink: 0;
 }
+.portal-shell.teresa-inside button.profile-avatar {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.portal-shell.teresa-inside .public-note,
+.portal-shell.teresa-inside .public-headline {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.portal-shell.teresa-inside .public-note {
+  color: var(--sw-muted);
+}
+.portal-shell.teresa-inside .profile-form {
+  display: grid;
+  gap: 12px;
+}
+.portal-shell.teresa-inside .profile-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sw-muted);
+}
+.portal-shell.teresa-inside .profile-form input,
+.portal-shell.teresa-inside .profile-form textarea {
+  width: 100%;
+  border: 1px solid var(--sw-line);
+  border-radius: 12px;
+  padding: 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: inherit;
+  background: #fff;
+}
+.portal-shell.teresa-inside .profile-form .check-row {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: inherit;
+}
+.portal-shell.teresa-inside .profile-form button[type="submit"] {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sw-blue);
+  color: #fff;
+  font-weight: 600;
+}
+.portal-shell.teresa-inside .profile-form p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}

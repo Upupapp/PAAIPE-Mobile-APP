@@ -41,10 +41,12 @@ import {
   getEvents,
   getSessions,
   getDirectory,
+  initialsFromName,
   type ApiEvent,
   type ApiSession,
   type DirectoryMember,
 } from "../lib/api";
+import { tryPatchProfile } from "../lib/auth-context";
 import { type DisplayIdentity } from "../lib/profile-display";
 import { openExternalUrl } from "../lib/legal-links";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
@@ -64,7 +66,15 @@ import {
 /** Four router branches. The center button opens the member feed. */
 type Branch = "Home" | "Learn" | "Events" | "Profile";
 type Detail =
-  "Directory" | "Benefits" | "Organization" | "Certificates" | "Resources" | "Programs" | "Session";
+  | "Directory"
+  | "Benefits"
+  | "Organization"
+  | "Certificates"
+  | "Resources"
+  | "Programs"
+  | "Session"
+  | "EditProfile"
+  | "PublicProfile";
 type View = Branch | Detail | "Feed";
 
 const branches: Array<{ label: Branch; icon: typeof Home; slot: number }> = [
@@ -108,6 +118,8 @@ const detailTitles: Record<Detail, string> = {
   Resources: "Resources",
   Programs: "Programs",
   Session: "Session",
+  EditProfile: "Edit profile",
+  PublicProfile: "Your public profile",
 };
 
 const accountMenu: Array<{ label: string; view: View; icon: typeof Home }> = [
@@ -129,6 +141,40 @@ function MiniLogo() {
   return <img src={logo} alt="PAAIPE" className="h-9 w-auto object-contain" />;
 }
 
+type PublicCard = {
+  name: string;
+  headline: string;
+  about: string;
+  work: string;
+  link: string;
+  directoryVisible: boolean;
+};
+
+const PUBLIC_CARD_KEY = "paaipe-public-profile";
+
+function readPublicCard(): PublicCard | null {
+  try {
+    const raw = localStorage.getItem(PUBLIC_CARD_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PublicCard>;
+    if (!value || typeof value.name !== "string") return null;
+    return {
+      name: value.name,
+      headline: typeof value.headline === "string" ? value.headline : "",
+      about: typeof value.about === "string" ? value.about : "",
+      work: typeof value.work === "string" ? value.work : "",
+      link: typeof value.link === "string" ? value.link : "",
+      directoryVisible: value.directoryVisible === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writePublicCard(card: PublicCard) {
+  localStorage.setItem(PUBLIC_CARD_KEY, JSON.stringify(card));
+}
+
 const PREVIEW_IDENTITY: DisplayIdentity = {
   displayName: "Guest Member",
   firstName: "Guest",
@@ -145,7 +191,8 @@ const PREVIEW_IDENTITY: DisplayIdentity = {
 };
 
 export function MobileAgentPortal() {
-  const { ready, user, identity, profileState, profileSyncPending, signOut } = useAuth();
+  const { ready, user, identity, profileState, profileSyncPending, signOut, refreshProfile } = useAuth();
+  const [publicCard, setPublicCard] = useState<PublicCard | null>(() => readPublicCard());
   const [preview, setPreview] = useState(false);
   const [directoryOffset, setDirectoryOffset] = useState(0);
   const signedIn = Boolean(user && profileState === "ready" && identity?.status !== "suspended");
@@ -306,7 +353,9 @@ export function MobileAgentPortal() {
           active === "Organization" ||
           active === "Benefits" ||
           active === "Directory" ||
-          active === "Programs"
+          active === "Programs" ||
+          active === "EditProfile" ||
+          active === "PublicProfile"
         ? "Profile"
         : activeBranch;
   /** Sheet-opened destinations pop back to the last branch; Profile tools keep classic parents. */
@@ -379,8 +428,27 @@ export function MobileAgentPortal() {
   if (!portalIdentity || (!preview && (profileState !== "ready" || identity?.status === "suspended")))
     return <ProfileGate />;
 
-  const displayName = portalIdentity.displayName;
-  const initials = portalIdentity.initials;
+  const displayName = publicCard?.name.trim() || portalIdentity.displayName;
+  const initials = publicCard?.name.trim()
+    ? initialsFromName(publicCard.name, portalIdentity.email)
+    : portalIdentity.initials;
+  const shownIdentity: DisplayIdentity = {
+    ...portalIdentity,
+    displayName,
+    firstName: displayName.split(/\s+/)[0] || portalIdentity.firstName,
+    initials,
+  };
+  const savePublicCard = async (next: PublicCard) => {
+    const saved = { ...next, name: next.name.trim() };
+    setPublicCard(saved);
+    writePublicCard(saved);
+    if (!user) return;
+    await tryPatchProfile(user, {
+      full_name: saved.name,
+      directoryVisible: saved.directoryVisible,
+    });
+    await refreshProfile();
+  };
   const agentNumber = portalIdentity.agentNumber;
   const openSession = (session: ApiSession) => {
     setSelectedSession(session);
@@ -454,7 +522,7 @@ export function MobileAgentPortal() {
         >
           {active === "Home" && (
             <HomeView
-              identity={portalIdentity}
+              identity={shownIdentity}
               events={events}
               sessions={sessions}
               eventData={eventData}
@@ -476,7 +544,25 @@ export function MobileAgentPortal() {
             />
           )}
           {active === "Events" && <EventsView events={events} loadState={eventData} />}
-          {active === "Profile" && <ProfileView identity={portalIdentity} go={select} />}
+          {active === "Profile" && (
+            <ProfileView
+              identity={shownIdentity}
+              go={select}
+              onEdit={() => select("EditProfile")}
+              onPreview={() => select("PublicProfile")}
+            />
+          )}
+          {active === "EditProfile" && (
+            <EditProfileView
+              identity={shownIdentity}
+              card={publicCard}
+              onSave={savePublicCard}
+              signedIn={Boolean(user)}
+            />
+          )}
+          {active === "PublicProfile" && (
+            <PublicProfileView identity={shownIdentity} card={publicCard} />
+          )}
           {active === "Feed" && (
             <FeedView author={displayName} initials={initials} />
           )}
@@ -1687,11 +1773,23 @@ function MembershipPill({ identity }: { identity: DisplayIdentity }) {
   );
 }
 
-function ProfileView({ identity, go }: { identity: DisplayIdentity; go: (view: View) => void }) {
+function ProfileView({
+  identity,
+  go,
+  onEdit,
+  onPreview,
+}: {
+  identity: DisplayIdentity;
+  go: (view: View) => void;
+  onEdit: () => void;
+  onPreview: () => void;
+}) {
   return (
     <div className="screen-stack animate-fade-in page-screen profile-screen">
       <section className="profile-hero">
-        <div className="avatar profile-avatar">{identity.initials}</div>
+        <button className="avatar profile-avatar" type="button" onClick={onPreview} aria-label="Preview public profile">
+          {identity.initials}
+        </button>
         <h1>{identity.displayName}</h1>
         <MembershipPill identity={identity} />
         <p>{identity.email}</p>
@@ -1722,6 +1820,22 @@ function ProfileView({ identity, go }: { identity: DisplayIdentity; go: (view: V
       <MembershipPanel />
       <h2 className="subheading">Account</h2>
       <div className="settings-list">
+        <button type="button" onClick={onEdit}>
+          <UserRound />
+          <span>
+            <strong>Edit profile</strong>
+            <small>Name, about, work, and directory</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button type="button" onClick={onPreview}>
+          <UserRound />
+          <span>
+            <strong>Preview public profile</strong>
+            <small>What members see when they open your photo</small>
+          </span>
+          <ChevronRight />
+        </button>
         <button type="button" onClick={() => go("Organization")}>
           <Building2 />
           <span>
@@ -1777,6 +1891,140 @@ function ProfileView({ identity, go }: { identity: DisplayIdentity; go: (view: V
           <ChevronRight />
         </button>
       </div>
+    </div>
+  );
+}
+
+function EditProfileView({
+  identity,
+  card,
+  onSave,
+  signedIn,
+}: {
+  identity: DisplayIdentity;
+  card: PublicCard | null;
+  onSave: (card: PublicCard) => Promise<void>;
+  signedIn: boolean;
+}) {
+  const [name, setName] = useState(card?.name || identity.displayName);
+  const [headline, setHeadline] = useState(card?.headline || "");
+  const [about, setAbout] = useState(card?.about || "");
+  const [work, setWork] = useState(card?.work || "");
+  const [link, setLink] = useState(card?.link || "");
+  const [directoryVisible, setDirectoryVisible] = useState(card?.directoryVisible ?? false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim()) {
+      setError("Add the name members should see.");
+      setSaved(false);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    try {
+      await onSave({ name, headline, about, work, link, directoryVisible });
+      setSaved(true);
+    } catch {
+      setError("The name could not be saved to your account. The public preview on this device was kept.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="screen-stack animate-fade-in page-screen">
+      <PageTitle
+        kicker="Account"
+        title="Edit profile"
+        subtitle={
+          signedIn
+            ? "Name and directory visibility save to your account. About, work, and the link stay on this device."
+            : "This preview keeps your edits on this device."
+        }
+      />
+      <form
+        className="profile-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <label>
+          Name
+          <input value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label>
+          Headline
+          <input value={headline} onChange={(event) => setHeadline(event.target.value)} placeholder="What you do" />
+        </label>
+        <label>
+          About
+          <textarea value={about} onChange={(event) => setAbout(event.target.value)} rows={4} placeholder="A short introduction" />
+        </label>
+        <label>
+          Work
+          <input value={work} onChange={(event) => setWork(event.target.value)} placeholder="Role and organization" />
+        </label>
+        <label>
+          Link
+          <input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://" />
+        </label>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={directoryVisible}
+            onChange={(event) => setDirectoryVisible(event.target.checked)}
+          />
+          Show me in the member directory
+        </label>
+        {error ? <p role="alert">{error}</p> : null}
+        {saved ? <p role="status">Saved. Open the preview to see the public profile.</p> : null}
+        <button type="submit" disabled={saving}>
+          {saving ? "Saving…" : "Save profile"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function PublicProfileView({ identity, card }: { identity: DisplayIdentity; card: PublicCard | null }) {
+  const headline = card?.headline.trim() || "";
+  const about = card?.about.trim() || "";
+  const work = card?.work.trim() || "";
+  const link = card?.link.trim() || "";
+  return (
+    <div className="screen-stack animate-fade-in page-screen">
+      <p className="public-note">This is what members see when they open your photo.</p>
+      <section className="profile-hero public-card">
+        <div className="avatar profile-avatar">{identity.initials}</div>
+        <h1>{identity.displayName}</h1>
+        {headline ? <p className="public-headline">{headline}</p> : null}
+        <MembershipPill identity={identity} />
+        {identity.agentNumber ? <p>Agent {identity.agentNumber}</p> : null}
+      </section>
+      <article className="program-card">
+        <div>
+          <strong>About</strong>
+          <p>{about || "No introduction yet."}</p>
+        </div>
+      </article>
+      <article className="program-card">
+        <div>
+          <strong>Work</strong>
+          <p>{work || "No work details yet."}</p>
+        </div>
+      </article>
+      {link ? (
+        <button className="portal-link" type="button" onClick={() => void openExternalUrl(link)}>
+          {link}
+        </button>
+      ) : (
+        <div className="empty-note">No link is on this profile.</div>
+      )}
     </div>
   );
 }
