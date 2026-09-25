@@ -64,13 +64,13 @@ type Detail =
   | "Benefits"
   | "Organization"
   | "Certificates"
-  | "Resources"
   | "Programs"
   | "Session"
   | "EditProfile"
   | "PublicProfile"
   | "MemberProfile";
 type View = Branch | Detail | "Feed";
+type LearnLane = "Sessions" | "Micros" | "Playlists" | "Resources";
 
 const branches: Array<{ label: Branch; icon: typeof Home; slot: number }> = [
   { label: "Home", icon: Home, slot: 0 },
@@ -110,7 +110,6 @@ const detailTitles: Record<Detail, string> = {
   Benefits: "Member benefits",
   Organization: "Organization",
   Certificates: "My certificates",
-  Resources: "Resources",
   Programs: "Programs",
   Session: "Session",
   EditProfile: "Edit profile",
@@ -125,11 +124,11 @@ const accountMenu: Array<{ label: string; view: View; icon: typeof Home }> = [
   { label: "My profile", view: "Profile", icon: UserRound },
 ];
 
-const generalMenu: Array<{ label: string; view: View; icon: typeof Home }> = [
+const generalMenu: Array<{ label: string; view: View; icon: typeof Home; lane?: LearnLane }> = [
   { label: "Events", view: "Events", icon: CalendarDays },
   { label: "Member directory", view: "Directory", icon: UsersRound },
   { label: "Member benefits", view: "Benefits", icon: Gift },
-  { label: "Resources", view: "Resources", icon: FileText },
+  { label: "Resources", view: "Learn", icon: FileText, lane: "Resources" },
   { label: "Organization", view: "Organization", icon: Building2 },
 ];
 
@@ -394,7 +393,7 @@ export function MobileAgentPortal() {
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(FEED_SEED);
   const [tickets, setTickets] = useState<Record<string, EventTicket>>(() => readTickets());
   const [notifications, setNotifications] = useState<AppNotification[]>(() => readNotifications());
-  const [learnLane, setLearnLane] = useState<"Sessions" | "Micros" | "Playlists" | "Resources">("Sessions");
+  const [learnLane, setLearnLane] = useState<LearnLane>("Sessions");
   const [active, setActive] = useState<View>("Home");
   const [activeBranch, setActiveBranch] = useState<Branch>("Home");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -454,7 +453,7 @@ export function MobileAgentPortal() {
     AppHaptics.medium();
   };
 
-  const openLearn = (lane: "Sessions" | "Micros" | "Playlists" | "Resources") => {
+  const openLearn = (lane: LearnLane) => {
     setLearnLane(lane);
     select("Learn");
   };
@@ -517,7 +516,7 @@ export function MobileAgentPortal() {
 
   const isDetail = active in detailTitles;
   const classicDetailParent: View =
-    active === "Resources" || active === "Session"
+    active === "Session"
       ? "Learn"
       : active === "MemberProfile"
         ? "Directory"
@@ -537,7 +536,6 @@ export function MobileAgentPortal() {
       active === "Benefits" ||
       active === "Programs" ||
       active === "Certificates" ||
-      active === "Resources" ||
       active === "Organization")
       ? activeBranch
       : classicDetailParent;
@@ -994,11 +992,11 @@ export function MobileAgentPortal() {
                 ))}
                 <div className="drawer-divider" />
                 <p className="drawer-label">General</p>
-                {generalMenu.map(({ label, view, icon: Icon }) => (
+                {generalMenu.map(({ label, view, icon: Icon, lane }) => (
                   <button
                     className="drawer-link"
                     key={label}
-                    onClick={() => (view === "Resources" ? openLearn("Resources") : select(view))}
+                    onClick={() => (lane ? openLearn(lane) : select(view))}
                   >
                     <Icon />
                     <span>{label}</span>
@@ -1098,24 +1096,6 @@ function BannerSlot({
   );
 }
 
-const HOME_NEWS = [
-  {
-    title: "October AI Exchange: save the date",
-    copy: "Tuesday, October 13, 8:00 PM PHT. Topic and speaker revealed soon.",
-    when: "Today",
-  },
-  {
-    title: "September recap is up",
-    copy: "Sven Bally's recordings and Q&A follow-ups are in Learnings.",
-    when: "Yesterday",
-  },
-  {
-    title: "The program roadmap is out",
-    copy: "AI Safari, Build Nights, Certification Pathways and more, in order.",
-    when: "Sep 14",
-  },
-] as const;
-
 function HomeView({
   identity,
   events,
@@ -1144,6 +1124,28 @@ function HomeView({
     events.find((e) => e.status !== "held" && e.status !== "cancelled") ||
     null;
   const continueSession = sessions[0] || null;
+  const news: Array<{ title: string; copy: string; when: string }> = [];
+  if (upcoming) {
+    news.push({
+      title: upcoming.title || "Upcoming AI Exchange",
+      copy: upcoming.topic || upcoming.description || "Topic and speaker to be revealed soon.",
+      when: upcoming.date || "Upcoming",
+    });
+  }
+  if (continueSession) {
+    news.push({
+      title: "New in Learnings",
+      copy: continueSession.speaker
+        ? `${continueSession.title || "Latest session"} — with ${continueSession.speaker}`
+        : continueSession.title || "Latest session published",
+      when: "Learnings",
+    });
+  }
+  news.push({
+    title: "Explore your programs",
+    copy: "Programs, the learning library, and member benefits are all in the portal.",
+    when: "Portal",
+  });
   return (
     <div className="screen-stack animate-fade-in">
       <section className="welcome-panel">
@@ -1253,7 +1255,7 @@ function HomeView({
           </button>
         </div>
         <div className="resource-list">
-          {HOME_NEWS.map((item) => (
+          {news.map((item) => (
             <article className="resource-card" key={item.title}>
               <div>
                 <strong>{item.title}</strong>
@@ -1530,8 +1532,8 @@ function LearnView({
 }: {
   sessions: ApiSession[];
   loadState: Loadable<ApiSession[]>;
-  lane: "Sessions" | "Micros" | "Playlists" | "Resources";
-  onLane: (lane: "Sessions" | "Micros" | "Playlists" | "Resources") => void;
+  lane: LearnLane;
+  onLane: (lane: LearnLane) => void;
   onOpen: (session: ApiSession) => void;
 }) {
   const [fileFormat, setFileFormat] = useState<(typeof FILE_FORMATS)[number]["label"]>("All formats");
