@@ -63,10 +63,9 @@ import {
 
 /** Four router branches. The center button opens the member feed. */
 type Branch = "Home" | "Learn" | "Events" | "Profile";
-type SheetDest = "Community";
 type Detail =
   "Directory" | "Benefits" | "Organization" | "Certificates" | "Resources" | "Programs" | "Session";
-type View = Branch | SheetDest | Detail | "Feed";
+type View = Branch | Detail | "Feed";
 
 const branches: Array<{ label: Branch; icon: typeof Home; slot: number }> = [
   { label: "Home", icon: Home, slot: 0 },
@@ -102,7 +101,7 @@ function navSurfacePath(slot: number | null, w = 390, h = 64) {
 }
 
 const detailTitles: Record<Detail, string> = {
-  Directory: "Member directory",
+  Directory: "Directory",
   Benefits: "Member benefits",
   Organization: "Organization",
   Certificates: "My certificates",
@@ -120,7 +119,6 @@ const accountMenu: Array<{ label: string; view: View; icon: typeof Home }> = [
 
 const generalMenu: Array<{ label: string; view: View; icon: typeof Home }> = [
   { label: "Events", view: "Events", icon: CalendarDays },
-  { label: "Community", view: "Community", icon: UsersRound },
   { label: "Member directory", view: "Directory", icon: UsersRound },
   { label: "Member benefits", view: "Benefits", icon: Gift },
   { label: "Resources", view: "Resources", icon: FileText },
@@ -301,7 +299,6 @@ export function MobileAgentPortal() {
   }, [user?.uid]);
 
   const isDetail = active in detailTitles;
-  const isCommunity = active === "Community";
   const classicDetailParent: View =
     active === "Resources" || active === "Session"
       ? "Learn"
@@ -309,8 +306,7 @@ export function MobileAgentPortal() {
           active === "Organization" ||
           active === "Benefits" ||
           active === "Directory" ||
-          active === "Programs" ||
-          active === "Community"
+          active === "Programs"
         ? "Profile"
         : activeBranch;
   /** Sheet-opened destinations pop back to the last branch; Profile tools keep classic parents. */
@@ -321,13 +317,10 @@ export function MobileAgentPortal() {
       active === "Programs" ||
       active === "Certificates" ||
       active === "Resources" ||
-      active === "Organization" ||
-      active === "Community")
+      active === "Organization")
       ? activeBranch
-      : isCommunity
-        ? activeBranch
-        : classicDetailParent;
-  const showBack = isDetail || isCommunity;
+      : classicDetailParent;
+  const showBack = isDetail;
   /** Bubble always tracks the last selected branch — center never looks selected. */
   const navBranch: Branch = activeBranch;
   const navEntry = branches.find((tab) => tab.label === navBranch) ?? {
@@ -432,9 +425,7 @@ export function MobileAgentPortal() {
               <span>Member portal</span>
             </div>
           ) : (
-            <strong className="header-title">
-              {active === "Community" ? "Community" : active}
-            </strong>
+            <strong className="header-title">{active}</strong>
           )}
           <div className="header-actions">
             {active === "Home" && !isDetail ? (
@@ -485,12 +476,6 @@ export function MobileAgentPortal() {
             />
           )}
           {active === "Events" && <EventsView events={events} loadState={eventData} />}
-          {active === "Community" && (
-            <CommunityView
-              onDirectory={() => select("Directory")}
-              onPrograms={() => select("Programs")}
-            />
-          )}
           {active === "Profile" && <ProfileView identity={portalIdentity} go={select} />}
           {active === "Feed" && (
             <FeedView author={displayName} initials={initials} />
@@ -1693,53 +1678,6 @@ function FeedView({ author, initials }: { author: string; initials: string }) {
   );
 }
 
-function CommunityView({
-  onDirectory,
-  onPrograms,
-}: {
-  onDirectory: () => void;
-  onPrograms: () => void;
-}) {
-  return (
-    <div className="screen-stack animate-fade-in page-screen">
-      <PageTitle
-        kicker="Your AI network"
-        title="Community"
-        subtitle="Find expertise, collaborators, and opportunities."
-      />
-      <div className="community-map">
-        <div>
-          <strong>Your AI community</strong>
-          <span className="network-cap">Explore the member directory and program roadmap.</span>
-        </div>
-      </div>
-
-      <div className="quick-grid">
-        <button type="button" onClick={onDirectory}>
-          <span className="quick-ico">
-            <UsersRound />
-          </span>
-          <strong>Directory</strong>
-          <span>Discover members</span>
-        </button>
-        <button type="button" onClick={onPrograms}>
-          <span className="quick-ico">
-            <Clock3 />
-          </span>
-          <strong>Programs</strong>
-          <span>Join an initiative</span>
-        </button>
-      </div>
-      <div className="section-heading spotlight-head">
-        <div>
-          <h2>Agent spotlight</h2>
-        </div>
-      </div>
-      <div className="empty-note">Spotlight members will appear here when available.</div>
-    </div>
-  );
-}
-
 function MembershipPill({ identity }: { identity: DisplayIdentity }) {
   return (
     <span className={`membership-pill status-${identity.status}`}>
@@ -1795,19 +1733,11 @@ function ProfileView({ identity, go }: { identity: DisplayIdentity; go: (view: V
       </div>
       <h2 className="subheading">Network</h2>
       <div className="settings-list">
-        <button type="button" onClick={() => go("Community")}>
-          <UsersRound />
-          <span>
-            <strong>Community</strong>
-            <small>Network hub and agent spotlight</small>
-          </span>
-          <ChevronRight />
-        </button>
         <button type="button" onClick={() => go("Directory")}>
           <UsersRound />
           <span>
             <strong>Directory</strong>
-            <small>Find agents and members</small>
+            <small>Agents and members</small>
           </span>
           <ChevronRight />
         </button>
@@ -1860,8 +1790,8 @@ function DirectoryView({ members, total }: { members: DirectoryMember[]; total: 
     <div className="screen-stack animate-fade-in page-screen">
       <PageTitle
         kicker="Member network"
-        title="Member directory"
-        subtitle="Members across the Philippine AI community."
+        title="Directory"
+        subtitle="Agents and members across the Philippine AI community."
       />
       <label className="search-field">
         <Search />
