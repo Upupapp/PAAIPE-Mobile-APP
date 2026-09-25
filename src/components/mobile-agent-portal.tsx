@@ -43,6 +43,18 @@ import { openExternalUrl } from "../lib/legal-links";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
 import { DataState, MembershipPanel, ProfileGate } from "./membership-panel";
 import { AppHaptics } from "../lib/app-haptics";
+import {
+  AI_EXCHANGE,
+  BENEFITS_INTRO,
+  EVENT_TYPES,
+  MEMBER_BENEFITS,
+  PARTNER_BENEFIT_DISCLAIMER,
+  PROGRAM_NOTES,
+  PROGRAMS,
+  RESOURCE_FILM,
+  RESOURCE_FORMATS,
+  RESOURCE_PREVIEWS,
+} from "../lib/website-content";
 
 /** M-14: 4 router branches only. Community lives in the center sheet. */
 type Branch = "Home" | "Learn" | "Events" | "Profile";
@@ -115,36 +127,6 @@ const detailTitles: Record<Detail, string> = {
   Programs: "Programs",
   Session: "Session",
 };
-
-const programs = [
-  {
-    title: "AI Exchange",
-    copy: "Monthly webinar series. Browse Events for the published schedule.",
-    state: "Events",
-  },
-  {
-    title: "AI Safari",
-    copy: "Field trips to AI companies and showcases.",
-    state: "In development",
-  },
-  {
-    title: "Build Nights",
-    copy: "Hands-on labs for small groups of members.",
-    state: "In development",
-  },
-  {
-    title: "Certification Pathways",
-    copy: "Cohort-based learning with scheduled intakes.",
-    state: "In development",
-  },
-  {
-    title: "Member Spotlight",
-    copy: "Member profiles and case studies of AI work.",
-    state: "In development",
-  },
-  { title: "Regional Circles", copy: "Local meetups led by Agents.", state: "In development" },
-  { title: "Mentorship", copy: "Individual and small-group mentoring.", state: "In development" },
-];
 
 const accountMenu: Array<{ label: string; view: View; icon: typeof Home }> = [
   { label: "Programs", view: "Programs", icon: Compass },
@@ -514,7 +496,9 @@ export function MobileAgentPortal() {
           {active === "Organization" && <OrganizationView />}
           {active === "Certificates" && <CertificatesView />}
           {active === "Resources" && <ResourcesView />}
-          {active === "Programs" && <ProgramsView onEvents={() => selectBranch("Events")} />}
+          {active === "Programs" && (
+            <ProgramsView onEvents={() => selectBranch("Events")} onResources={() => select("Resources")} />
+          )}
           {active === "Session" && (
             <SessionView session={selectedSession} onResources={() => select("Resources")} />
           )}
@@ -977,9 +961,61 @@ function EventsView({
   loadState: Loadable<ApiEvent[]>;
 }) {
   const [period, setPeriod] = useState<"Upcoming" | "Past">("Upcoming");
+  const [showExchange, setShowExchange] = useState(false);
   const list = events.filter((event) =>
     period === "Past" ? event.status === "held" : event.status !== "held",
   );
+  if (showExchange) {
+    return (
+      <div className="screen-stack animate-fade-in page-screen">
+        <button className="text-link back-link" type="button" onClick={() => setShowExchange(false)}>
+          <ArrowLeft /> Events
+        </button>
+        <PageTitle kicker={AI_EXCHANGE.label} title={AI_EXCHANGE.title} subtitle={AI_EXCHANGE.subtitle} />
+        <p className="copy-block">{AI_EXCHANGE.description}</p>
+        <ul className="schedule-list">
+          {AI_EXCHANGE.schedule.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+        <h2 className="subheading">Public agenda</h2>
+        <ol className="agenda-list">
+          {AI_EXCHANGE.agenda.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ol>
+        <article className="program-card">
+          <div>
+            <strong>{AI_EXCHANGE.formatHeading}</strong>
+            <p>{AI_EXCHANGE.formatBody}</p>
+          </div>
+        </article>
+        <article className="program-card">
+          <div>
+            <strong>{AI_EXCHANGE.audienceHeading}</strong>
+            <p>{AI_EXCHANGE.audienceIntro}</p>
+            <ul className="plain-list">
+              {AI_EXCHANGE.audiences.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        </article>
+        <article className="program-card">
+          <div>
+            <strong>{AI_EXCHANGE.afterwardsHeading}</strong>
+            <p>{AI_EXCHANGE.afterwardsBody}</p>
+          </div>
+        </article>
+        <div className="member-lock">
+          <span className="soft-chip">{AI_EXCHANGE.lockLabel}</span>
+          <strong>{AI_EXCHANGE.lockHeading}</strong>
+          <p>{AI_EXCHANGE.lockBody}</p>
+          <p>{AI_EXCHANGE.accessNote}</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="screen-stack animate-fade-in page-screen">
       <PageTitle
@@ -987,6 +1023,29 @@ function EventsView({
         title="Events"
         subtitle="Meet the builders shaping AI across the Philippines."
       />
+      <button className="program-card exchange-card" type="button" onClick={() => setShowExchange(true)}>
+        <div>
+          <span className="soft-chip">Members only</span>
+          <strong>{AI_EXCHANGE.title}</strong>
+          <p>{AI_EXCHANGE.subtitle}</p>
+          <span className="feature-link">
+            Series detail <ChevronRight />
+          </span>
+        </div>
+      </button>
+      <h2 className="subheading">Event types</h2>
+      <p className="copy-block">Descriptions of the kinds of sessions PAAIPE runs. These are not dated events.</p>
+      <div className="program-list">
+        {EVENT_TYPES.map((item) => (
+          <article className="program-card" key={item.name}>
+            <div>
+              <strong>{item.name}</strong>
+              <p>{item.description}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+      <h2 className="subheading">Published events</h2>
       <div className="filter-pills" aria-label="Event filter">
         {(["Upcoming", "Past"] as const).map((label) => (
           <button
@@ -1240,14 +1299,19 @@ function BenefitsView() {
       <PageTitle
         kicker="Membership"
         title="Member benefits"
-        subtitle="Exclusive benefits for PAAIPE Agents."
+        subtitle="Benefits designed to help members learn, build and connect."
       />
-      <div className="empty-note">
-        <strong>Coming soon</strong>
-        <p>
-          Partner perks and member-only offers will appear here when they are ready. Nothing to
-          claim yet.
-        </p>
+      <p className="copy-block">{BENEFITS_INTRO}</p>
+      <div className="program-list">
+        {MEMBER_BENEFITS.map((benefit) => (
+          <article className="program-card" key={benefit.name}>
+            <div>
+              <strong>{benefit.name}</strong>
+              <p>{benefit.description}</p>
+              {benefit.partner ? <p className="partner-disclaimer">{PARTNER_BENEFIT_DISCLAIMER}</p> : null}
+            </div>
+          </article>
+        ))}
       </div>
     </div>
   );
@@ -1295,55 +1359,105 @@ function CertificatesView() {
   );
 }
 function ResourcesView() {
+  const [format, setFormat] = useState<(typeof RESOURCE_FORMATS)[number]>("All formats");
+  const previews = RESOURCE_PREVIEWS.filter((item) => format === "All formats" || item.format === format);
+  const showFilm = format === "All formats" || format === "Video";
   return (
     <div className="screen-stack page-screen">
       <PageTitle
         kicker="Member materials"
         title="Resources"
-        subtitle="Slides, guides and references from PAAIPE."
+        subtitle="PDFs, videos and templates — every resource says up front what it is and how to get it."
       />
-      <div className="empty-note">
-        The member file library is not connected in this mobile version. View the published
-        materials in the web portal.
+      <div className="filter-pills" aria-label="Filter by format">
+        {RESOURCE_FORMATS.map((label) => (
+          <button
+            key={label}
+            type="button"
+            className={format === label ? "selected" : ""}
+            aria-pressed={format === label}
+            onClick={() => setFormat(label)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
-      <button
-        className="portal-link"
-        onClick={() => void openExternalUrl("https://paaipe.org/portal-resources.html")}
-      >
-        Open Resources on the web
-      </button>
+      {showFilm ? (
+        <article className="program-card">
+          <div>
+            <span className="soft-chip">{RESOURCE_FILM.format}</span>
+            <strong>{RESOURCE_FILM.title}</strong>
+            <p>{RESOURCE_FILM.description}</p>
+            <p>
+              {RESOURCE_FILM.medium} · {RESOURCE_FILM.detail}
+            </p>
+            <button
+              className="portal-link"
+              type="button"
+              onClick={() => void openExternalUrl(RESOURCE_FILM.href)}
+            >
+              {RESOURCE_FILM.actionLabel} on {RESOURCE_FILM.host}
+            </button>
+          </div>
+        </article>
+      ) : null}
+      {previews.length === 0 && !showFilm ? (
+        <div className="empty-note">No resources in this format yet.</div>
+      ) : (
+        <div className="program-list">
+          {previews.map((item) => (
+            <article className="program-card" key={item.title}>
+              <div>
+                <span className="soft-chip">{item.status}</span>
+                <strong>{item.title}</strong>
+                <p>{item.description}</p>
+                <p>
+                  {item.format} · {item.medium} · {item.topic}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-function ProgramsView({ onEvents }: { onEvents: () => void }) {
+function ProgramsView({ onEvents, onResources }: { onEvents: () => void; onResources: () => void }) {
   return (
     <div className="screen-stack page-screen">
       <PageTitle
         kicker="Program roadmap"
         title="Programs"
-        subtitle="Discover, learn, engage, build, certify, connect and contribute."
+        subtitle="Public learning and members-only programs published by PAAIPE."
       />
       <div className="program-list">
-        {programs.map((p) => (
-          <article className="program-card" key={p.title}>
+        {PROGRAMS.map((program) => (
+          <article className="program-card" key={program.slug}>
             <div>
-              <strong>{p.title}</strong>
-              <p>{p.copy}</p>
+              <strong>{program.title}</strong>
+              <p>{program.copy}</p>
             </div>
-            {p.state === "Events" ? (
-              <button className="state on" onClick={onEvents}>
+            {"opensEvents" in program && program.opensEvents ? (
+              <button className="state on" type="button" onClick={onEvents}>
                 Events
               </button>
+            ) : "opensResources" in program && program.opensResources ? (
+              <button className="state on" type="button" onClick={onResources}>
+                Resources
+              </button>
             ) : (
-              <span className="state">{p.state}</span>
+              <span className={`state ${program.visibility === "public" ? "public" : ""}`}>
+                {program.visibility === "public" ? "Public" : "Members only"}
+              </span>
             )}
           </article>
         ))}
       </div>
-      <div className="empty-note">
-        Interest lists, waitlists and applications are in development. Registration details will be
-        announced here when available.
-      </div>
+      {PROGRAM_NOTES.map((note) => (
+        <div className="empty-note" key={note}>
+          {note}
+        </div>
+      ))}
     </div>
   );
 }

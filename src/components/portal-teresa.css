@@ -475,6 +475,56 @@
   font-size: 13px;
   line-height: 1.4;
 }
+.portal-shell.teresa-inside .copy-block,
+.portal-shell.teresa-inside .partner-disclaimer {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #445069;
+  margin: 0;
+}
+.portal-shell.teresa-inside .partner-disclaimer {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff8e8;
+  color: #6b4e12;
+}
+.portal-shell.teresa-inside .schedule-list,
+.portal-shell.teresa-inside .agenda-list,
+.portal-shell.teresa-inside .plain-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #33415c;
+}
+.portal-shell.teresa-inside .member-lock {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #eef3ff;
+}
+.portal-shell.teresa-inside .member-lock p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.portal-shell.teresa-inside button.exchange-card {
+  text-align: left;
+  width: 100%;
+  border: 1px solid var(--portal-line, #d7e2f5);
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.portal-shell.teresa-inside .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
 .portal-shell.teresa-inside .state {
   font-size: 11px;
   font-weight: 500;
