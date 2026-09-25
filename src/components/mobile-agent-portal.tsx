@@ -13,6 +13,7 @@ import {
   Files,
   Gift,
   Grid2x2,
+  Heart,
   LayoutTemplate,
   ListChecks,
   Home,
@@ -21,9 +22,12 @@ import {
   Mail,
   MapPin,
   Menu,
+  MessageCircle,
+  Newspaper,
   Play,
   Presentation,
   Search,
+  Share2,
   UserRound,
   UsersRound,
   X,
@@ -57,12 +61,12 @@ import {
   RESOURCE_PREVIEWS,
 } from "../lib/website-content";
 
-/** M-14: 4 router branches only. Community lives in the center sheet. */
+/** Four router branches. The center button opens the member feed. */
 type Branch = "Home" | "Learn" | "Events" | "Profile";
 type SheetDest = "Community";
 type Detail =
   "Directory" | "Benefits" | "Organization" | "Certificates" | "Resources" | "Programs" | "Session";
-type View = Branch | SheetDest | Detail;
+type View = Branch | SheetDest | Detail | "Feed";
 
 const branches: Array<{ label: Branch; icon: typeof Home; slot: number }> = [
   { label: "Home", icon: Home, slot: 0 },
@@ -96,28 +100,6 @@ function navSurfacePath(slot: number | null, w = 390, h = 64) {
     `L${w},${h} L0,${h} Z`,
   ].join(" ");
 }
-
-const quickActionRows: Array<{ label: string; view: View; icon: typeof Home; copy: string }> = [
-  {
-    label: "Community",
-    view: "Community",
-    icon: UsersRound,
-    copy: "Network hub and agent spotlight",
-  },
-  { label: "Directory", view: "Directory", icon: UsersRound, copy: "Find agents and members" },
-  {
-    label: "Benefits & programs",
-    view: "Benefits",
-    icon: Gift,
-    copy: "Membership benefits and programs",
-  },
-];
-
-const browseAllRows: Array<{ label: string; view: View; icon: typeof Home }> = [
-  { label: "Certificates", view: "Certificates", icon: Award },
-  { label: "Resources", view: "Resources", icon: FileText },
-  { label: "Organization", view: "Organization", icon: Building2 },
-];
 
 const detailTitles: Record<Detail, string> = {
   Directory: "Member directory",
@@ -202,8 +184,6 @@ export function MobileAgentPortal() {
   const [activeBranch, setActiveBranch] = useState<Branch>("Home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [quickOpen, setQuickOpen] = useState(false);
-  const [browseAllOpen, setBrowseAllOpen] = useState(false);
   const [fromSheet, setFromSheet] = useState(false);
   const [arriveTick, setArriveTick] = useState(0);
   const [centerPress, setCenterPress] = useState<"idle" | "in" | "over" | "settle">("idle");
@@ -219,7 +199,6 @@ export function MobileAgentPortal() {
   const select = (view: View, opts?: { fromSheet?: boolean; haptic?: boolean }) => {
     setActive(view);
     setMenuOpen(false);
-    setQuickOpen(false);
     setFromSheet(Boolean(opts?.fromSheet));
     if (isBranch(view)) setActiveBranch(view);
     triggerArrive();
@@ -254,11 +233,9 @@ export function MobileAgentPortal() {
     centerAnimTimer.current = [t1, t2, t3];
   };
 
-  /** Center opens sheet while press animation starts (not after it ends). */
-  const openQuickActions = () => {
+  const openFeed = () => {
     runCenterPressAnim();
-    setBrowseAllOpen(false);
-    setQuickOpen(true);
+    select("Feed");
     AppHaptics.medium();
   };
 
@@ -267,18 +244,8 @@ export function MobileAgentPortal() {
     select("Learn");
   };
 
-  const openFromSheet = (view: View) => {
-    AppHaptics.selection();
-    if (view === "Resources") {
-      setLearnLane("Resources");
-      select("Learn", { fromSheet: true });
-      return;
-    }
-    select(view, { fromSheet: true });
-  };
-
   useEffect(() => {
-    if (!menuOpen && !quickOpen && !notificationsOpen) return;
+    if (!menuOpen && !notificationsOpen) return;
     const previous = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -294,7 +261,6 @@ export function MobileAgentPortal() {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMenuOpen(false);
-        setQuickOpen(false);
         setNotificationsOpen(false);
       }
       if (event.key === "Tab") {
@@ -316,7 +282,7 @@ export function MobileAgentPortal() {
       document.removeEventListener("keydown", onKey);
       previous?.focus();
     };
-  }, [menuOpen, quickOpen, notificationsOpen]);
+  }, [menuOpen, notificationsOpen]);
 
   useEffect(
     () => () => {
@@ -331,7 +297,6 @@ export function MobileAgentPortal() {
     setSelectedSession(null);
     setDirectoryOffset(0);
     setMenuOpen(false);
-    setQuickOpen(false);
     setNotificationsOpen(false);
   }, [user?.uid]);
 
@@ -340,11 +305,14 @@ export function MobileAgentPortal() {
   const classicDetailParent: View =
     active === "Resources" || active === "Session"
       ? "Learn"
-      : active === "Certificates" || active === "Organization" || active === "Benefits"
+      : active === "Certificates" ||
+          active === "Organization" ||
+          active === "Benefits" ||
+          active === "Directory" ||
+          active === "Programs" ||
+          active === "Community"
         ? "Profile"
-        : active === "Directory" || active === "Programs"
-          ? "Community"
-          : activeBranch;
+        : activeBranch;
   /** Sheet-opened destinations pop back to the last branch; Profile tools keep classic parents. */
   const detailParent: View =
     fromSheet &&
@@ -524,6 +492,9 @@ export function MobileAgentPortal() {
             />
           )}
           {active === "Profile" && <ProfileView identity={portalIdentity} go={select} />}
+          {active === "Feed" && (
+            <FeedView author={displayName} initials={initials} />
+          )}
           {active === "Directory" && (
             <>
               <DataState result={directoryData} label="Directory">
@@ -590,13 +561,12 @@ export function MobileAgentPortal() {
           <button
             type="button"
             className={centerPress === "idle" ? "nav-center" : `nav-center press-${centerPress}`}
-            aria-label="Quick actions"
-            aria-haspopup="dialog"
-            aria-expanded={quickOpen}
-            onClick={openQuickActions}
+            aria-label="Feed"
+            aria-current={active === "Feed" ? "page" : undefined}
+            onClick={openFeed}
           >
-            <Grid2x2 />
-            <span className="nav-center-label">Explore</span>
+            <Newspaper />
+            <span className="nav-center-label">Feed</span>
           </button>
           {branches.slice(2).map(({ label, icon: Icon }) => (
             <button
@@ -680,84 +650,6 @@ export function MobileAgentPortal() {
                 </button>
                 {signOutError && <p role="alert">{signOutError}</p>}
               </div>
-            </aside>
-          </div>
-        )}
-
-        {quickOpen && (
-          <div
-            ref={overlayRef}
-            className="drawer-layer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Quick actions"
-          >
-            <button
-              className="drawer-backdrop"
-              aria-label="Close quick actions"
-              type="button"
-              onClick={() => setQuickOpen(false)}
-            />
-            <aside className="quick-actions-sheet">
-              <div className="sheet-handle" aria-hidden="true" />
-              <div className="quick-actions-head">
-                <strong>Quick actions</strong>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="Close quick actions"
-                  onClick={() => setQuickOpen(false)}
-                >
-                  <X />
-                </button>
-              </div>
-              <div className="quick-actions-list">
-                {quickActionRows.map(({ label, view, icon: Icon, copy }) => (
-                  <button
-                    type="button"
-                    className="quick-action-row"
-                    key={label}
-                    onClick={() => openFromSheet(view)}
-                  >
-                    <span className="quick-action-ico">
-                      <Icon />
-                    </span>
-                    <span className="quick-action-copy">
-                      <strong>{label}</strong>
-                      <small>{copy}</small>
-                    </span>
-                    <ChevronRight />
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="quick-browse-toggle"
-                aria-expanded={browseAllOpen}
-                onClick={() => setBrowseAllOpen((v) => !v)}
-              >
-                Browse all
-              </button>
-              {browseAllOpen ? (
-                <div className="quick-actions-list browse-all-list">
-                  {browseAllRows.map(({ label, view, icon: Icon }) => (
-                    <button
-                      type="button"
-                      className="quick-action-row"
-                      key={label}
-                      onClick={() => openFromSheet(view)}
-                    >
-                      <span className="quick-action-ico">
-                        <Icon />
-                      </span>
-                      <span className="quick-action-copy">
-                        <strong>{label}</strong>
-                      </span>
-                      <ChevronRight />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </aside>
           </div>
         )}
@@ -1595,6 +1487,212 @@ function EventsView({
   );
 }
 
+type FeedComment = { id: string; author: string; body: string };
+type FeedPost = {
+  id: string;
+  author: string;
+  initials: string;
+  body: string;
+  likes: number;
+  liked: boolean;
+  comments: FeedComment[];
+};
+
+const FEED_SEED: FeedPost[] = [
+  {
+    id: "signals",
+    author: "PAAIPE",
+    initials: "PA",
+    body: "From Signals to Strategy is in Learnings, under Resources. Members can open the September AI Exchange deck there.",
+    likes: 4,
+    liked: false,
+    comments: [],
+  },
+  {
+    id: "circles",
+    author: "PAAIPE",
+    initials: "PA",
+    body: "Regional Circles are listed under Profile, then Programs. Interest lists open when a circle is ready.",
+    likes: 2,
+    liked: false,
+    comments: [],
+  },
+];
+
+function FeedView({ author, initials }: { author: string; initials: string }) {
+  const [posts, setPosts] = useState<FeedPost[]>(FEED_SEED);
+  const [draft, setDraft] = useState("");
+  const [openComments, setOpenComments] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [sharePost, setSharePost] = useState<FeedPost | null>(null);
+
+  const publish = () => {
+    const body = draft.trim();
+    if (!body) return;
+    setPosts((current) => [
+      {
+        id: `local-${Date.now()}`,
+        author,
+        initials,
+        body,
+        likes: 0,
+        liked: false,
+        comments: [],
+      },
+      ...current,
+    ]);
+    setDraft("");
+  };
+
+  const toggleLike = (id: string) => {
+    setPosts((current) =>
+      current.map((post) =>
+        post.id === id
+          ? { ...post, liked: !post.liked, likes: post.likes + (post.liked ? -1 : 1) }
+          : post,
+      ),
+    );
+  };
+
+  const addComment = (id: string) => {
+    const body = commentDraft.trim();
+    if (!body) return;
+    setPosts((current) =>
+      current.map((post) =>
+        post.id === id
+          ? {
+              ...post,
+              comments: [...post.comments, { id: `c-${Date.now()}`, author, body }],
+            }
+          : post,
+      ),
+    );
+    setCommentDraft("");
+  };
+
+  const share = (network: "facebook" | "linkedin" | "x") => {
+    if (!sharePost) return;
+    const text = encodeURIComponent(sharePost.body);
+    const url = encodeURIComponent("https://paaipe.org");
+    const href =
+      network === "facebook"
+        ? `https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`
+        : network === "linkedin"
+          ? `https://www.linkedin.com/sharing/share-offsite/?url=${url}`
+          : `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
+    void openExternalUrl(href);
+    setSharePost(null);
+  };
+
+  return (
+    <div className="screen-stack animate-fade-in page-screen">
+      <PageTitle
+        kicker="Members"
+        title="Feed"
+        subtitle="Posts, likes, and comments stay on this device until the feed is connected."
+      />
+      <form
+        className="feed-composer"
+        onSubmit={(event) => {
+          event.preventDefault();
+          publish();
+        }}
+      >
+        <div className="avatar">{initials}</div>
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Share something with members"
+          rows={3}
+        />
+        <button type="submit" disabled={!draft.trim()}>
+          Post
+        </button>
+      </form>
+      {posts.map((post) => (
+        <article className="feed-card" key={post.id}>
+          <header>
+            <div className="avatar">{post.initials}</div>
+            <strong>{post.author}</strong>
+          </header>
+          <p>{post.body}</p>
+          <div className="feed-actions">
+            <button
+              type="button"
+              className={post.liked ? "on" : ""}
+              aria-pressed={post.liked}
+              onClick={() => toggleLike(post.id)}
+            >
+              <Heart fill={post.liked ? "currentColor" : "none"} />
+              {post.likes}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpenComments((current) => (current === post.id ? null : post.id));
+                setCommentDraft("");
+              }}
+            >
+              <MessageCircle />
+              {post.comments.length}
+            </button>
+            <button type="button" onClick={() => setSharePost(post)}>
+              <Share2 />
+              Share
+            </button>
+          </div>
+          {openComments === post.id ? (
+            <div className="feed-comments">
+              {post.comments.length === 0 ? (
+                <p>No comments yet.</p>
+              ) : (
+                post.comments.map((comment) => (
+                  <p key={comment.id}>
+                    <strong>{comment.author}</strong> {comment.body}
+                  </p>
+                ))
+              )}
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addComment(post.id);
+                }}
+              >
+                <input
+                  value={commentDraft}
+                  onChange={(event) => setCommentDraft(event.target.value)}
+                  placeholder="Write a comment"
+                />
+                <button type="submit" disabled={!commentDraft.trim()}>
+                  Send
+                </button>
+              </form>
+            </div>
+          ) : null}
+        </article>
+      ))}
+      {sharePost ? (
+        <div className="format-sheet" role="dialog" aria-modal="true" aria-label="Share post">
+          <button className="format-backdrop" type="button" aria-label="Close share" onClick={() => setSharePost(null)} />
+          <div className="format-panel">
+            <div className="format-panel-head">
+              <strong>Share</strong>
+              <button type="button" aria-label="Close" onClick={() => setSharePost(null)}>
+                <X />
+              </button>
+            </div>
+            <div className="feed-share">
+              <button type="button" onClick={() => share("facebook")}>Facebook</button>
+              <button type="button" onClick={() => share("linkedin")}>LinkedIn</button>
+              <button type="button" onClick={() => share("x")}>X</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CommunityView({
   onDirectory,
   onPrograms,
@@ -1694,11 +1792,38 @@ function ProfileView({ identity, go }: { identity: DisplayIdentity; go: (view: V
           </span>
           <ChevronRight />
         </button>
+      </div>
+      <h2 className="subheading">Network</h2>
+      <div className="settings-list">
+        <button type="button" onClick={() => go("Community")}>
+          <UsersRound />
+          <span>
+            <strong>Community</strong>
+            <small>Network hub and agent spotlight</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button type="button" onClick={() => go("Directory")}>
+          <UsersRound />
+          <span>
+            <strong>Directory</strong>
+            <small>Find agents and members</small>
+          </span>
+          <ChevronRight />
+        </button>
         <button type="button" onClick={() => go("Benefits")}>
           <Gift />
           <span>
-            <strong>Member benefits</strong>
-            <small>Upcoming partner perks</small>
+            <strong>Benefits</strong>
+            <small>Membership perks</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button type="button" onClick={() => go("Programs")}>
+          <Compass />
+          <span>
+            <strong>Programs</strong>
+            <small>AI Safari and Regional Circles</small>
           </span>
           <ChevronRight />
         </button>
@@ -1710,14 +1835,6 @@ function ProfileView({ identity, go }: { identity: DisplayIdentity; go: (view: V
           <span>
             <strong>My certificates</strong>
             <small>View earned credentials</small>
-          </span>
-          <ChevronRight />
-        </button>
-        <button type="button" onClick={() => go("Programs")}>
-          <Compass />
-          <span>
-            <strong>Programs</strong>
-            <small>Explore learning initiatives</small>
           </span>
           <ChevronRight />
         </button>
