@@ -146,13 +146,31 @@ function MiniLogo() {
   return <img src={logo} alt="PAAIPE" className="h-9 w-auto object-contain" />;
 }
 
+const PREVIEW_IDENTITY: DisplayIdentity = {
+  displayName: "Guest Member",
+  firstName: "Guest",
+  initials: "GM",
+  email: "guest@paaipe.org",
+  status: "guest",
+  state: "guest_pending",
+  membershipLabel: "Guest · awaiting confirmation",
+  agentNumber: null,
+  isAgent: false,
+  emailVerified: true,
+  confirmationSeen: false,
+  profileSyncPending: false,
+};
+
 export function MobileAgentPortal() {
   const { ready, user, identity, profileState, profileSyncPending, signOut } = useAuth();
+  const [preview, setPreview] = useState(false);
   const [directoryOffset, setDirectoryOffset] = useState(0);
-  const accountKey =
-    user && profileState === "ready" && identity?.status !== "suspended" ? user.uid : null;
-  const eventData = useLoadable(accountKey, getEvents);
-  const sessionData = useLoadable(accountKey, getSessions);
+  const signedIn = Boolean(user && profileState === "ready" && identity?.status !== "suspended");
+  const showPortal = signedIn || preview;
+  const portalIdentity = identity ?? (preview ? PREVIEW_IDENTITY : null);
+  const accountKey = signedIn ? user!.uid : null;
+  const eventData = useLoadable(showPortal ? "events" : null, getEvents);
+  const sessionData = useLoadable(showPortal ? "sessions" : null, getSessions);
   const directoryData = useLoadable(
     accountKey ? `${accountKey}:${directoryOffset}` : null,
     async () => getDirectory(await user!.getIdToken(), directoryOffset),
@@ -162,6 +180,12 @@ export function MobileAgentPortal() {
   const directory = directoryData.data?.members ?? [];
   const [signOutError, setSignOutError] = useState("");
   const logout = async () => {
+    if (preview && !user) {
+      setPreview(false);
+      setMenuOpen(false);
+      setActive("Home");
+      return;
+    }
     try {
       await signOut();
       setMenuOpen(false);
@@ -350,22 +374,39 @@ export function MobileAgentPortal() {
     );
   }
 
-  if (!user) {
+  if (!showPortal) {
     return (
       <div className="app-stage">
         <div className="phone-app">
           <MobileOnboarding />
+          <div style={{ padding: "0 24px 28px" }}>
+            <button
+              type="button"
+              onClick={() => setPreview(true)}
+              style={{
+                width: "100%",
+                minHeight: 48,
+                borderRadius: 14,
+                border: "1px solid #cbd9f3",
+                background: "#2f6cf0",
+                color: "#fff",
+                fontWeight: 600,
+              }}
+            >
+              Preview signed-in screens
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (profileState !== "ready" || !identity || identity.status === "suspended")
+  if (!portalIdentity || (!preview && (profileState !== "ready" || identity?.status === "suspended")))
     return <ProfileGate />;
 
-  const displayName = identity.displayName;
-  const initials = identity.initials;
-  const agentNumber = identity.agentNumber;
+  const displayName = portalIdentity.displayName;
+  const initials = portalIdentity.initials;
+  const agentNumber = portalIdentity.agentNumber;
   const openSession = (session: ApiSession) => {
     setSelectedSession(session);
     select("Session");
@@ -440,7 +481,7 @@ export function MobileAgentPortal() {
         >
           {active === "Home" && (
             <HomeView
-              identity={identity}
+              identity={portalIdentity}
               events={events}
               sessions={sessions}
               eventData={eventData}
@@ -467,7 +508,7 @@ export function MobileAgentPortal() {
               onPrograms={() => select("Programs")}
             />
           )}
-          {active === "Profile" && <ProfileView identity={identity} go={select} />}
+          {active === "Profile" && <ProfileView identity={portalIdentity} go={select} />}
           {active === "Directory" && (
             <>
               <DataState result={directoryData} label="Directory">
@@ -585,7 +626,7 @@ export function MobileAgentPortal() {
                 <div className="drawer-identity">
                   <div className="avatar xl">{initials}</div>
                   <strong>{displayName}</strong>
-                  <MembershipPill identity={identity} />
+                  <MembershipPill identity={portalIdentity} />
                   {agentNumber ? (
                     <span className="agent-id-chip">Agent ID {agentNumber}</span>
                   ) : null}
