@@ -396,11 +396,10 @@ const PREVIEW_MICROS: ApiMicro[] = [
   {
     id: "prev-m-prompt",
     title: "Prompt in 30s (sample)",
-    description: "Preview sample micro. Real vertical micros appear here when published.",
+    description: "Preview sample micro. Real vertical micros play here when published.",
     speaker: "Sample Speaker",
-    source: "youtube",
-    youtubeId: "dQw4w9WgXcQ",
     aspect: "9:16",
+    posterUrl: "https://paaipe.org/assets/img/ai-exchange-session.jpg",
     published: true,
     displayOrder: 1,
   },
