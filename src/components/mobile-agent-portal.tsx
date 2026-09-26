@@ -2770,8 +2770,8 @@ function EventCertificateCard({
       const result = await emailMyEventCertificate(token, eventId);
       setNotice(
         result.emailedAt
-          ? "We've emailed your certificate to your PAAIPE address."
-          : "Your certificate email was requested.",
+          ? "Requested — PAAIPE will email your certificate to your address. If it doesn't arrive, check your spam folder."
+          : "Requested — PAAIPE will email your certificate to your address.",
       );
     } catch (error) {
       setNotice(describeFailure(error).message);
