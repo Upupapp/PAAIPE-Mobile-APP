@@ -4459,17 +4459,16 @@ function DirectoryView({
             : "No opted-in Agents are listed yet."}
         </div>
       ) : (
-        <div className="member-list">
+        <div className="directory-grid">
           {shown.map((m) => (
-            <button className="member-card" type="button" key={m.uid} onClick={() => onOpen(m)}>
-              <div className="avatar">{m.photo ? <img src={m.photo} alt="" /> : m.initials}</div>
-              <div>
-                <strong>{m.name}</strong>
-                <span>
-                  {m.role || (m.agentNumber ? `Agent ${m.agentNumber}` : "Confirmed Agent")}
-                </span>
+            <button className="directory-tile" type="button" key={m.uid} onClick={() => onOpen(m)}>
+              <div className="avatar directory-tile-avatar">
+                {m.photo ? <img src={m.photo} alt="" /> : m.initials}
               </div>
-              <ChevronRight />
+              <strong>{m.name}</strong>
+              <span>
+                {m.role || (m.agentNumber ? `Agent ${m.agentNumber}` : "Confirmed Agent")}
+              </span>
             </button>
           ))}
         </div>
