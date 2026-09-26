@@ -1314,15 +1314,26 @@ export function MobileAgentPortal() {
             </>
           )}
           {active === "Benefits" && <BenefitsView />}
-          {active === "Organization" && <OrganizationView />}
+          {active === "Organization" && (
+            <OrganizationView
+              getToken={getToken}
+              signedIn={signedIn}
+              events={events}
+              identity={shownIdentity}
+            />
+          )}
           {active === "Diagnostics" && (
             <DiagnosticsView
               pendingCount={pendingRegistrations}
               onSyncNow={syncPendingRegistrations}
             />
           )}
-          {active === "Certificates" && <CertificatesView />}
-          {active === "Programs" && <ProgramsView onEvents={() => selectBranch("Events")} />}
+          {active === "Certificates" && (
+            <CertificatesView getToken={getToken} signedIn={signedIn} />
+          )}
+          {active === "Programs" && (
+            <ProgramsView events={events} onEvents={() => selectBranch("Events")} />
+          )}
           {active === "Session" && (
             <SessionView
               session={selectedSession}
@@ -4452,7 +4463,225 @@ function BenefitsView() {
     </div>
   );
 }
-function OrganizationView() {
+function OrganizationView({
+  getToken,
+  signedIn,
+  events,
+  identity,
+}: {
+  getToken: () => Promise<string | null>;
+  signedIn: boolean;
+  events: ApiEvent[];
+  identity: DisplayIdentity;
+}) {
+  const [orgs, setOrgs] = useState<ApiOrganization[] | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [mode, setMode] = useState<"list" | "add" | "apply">("list");
+  const [name, setName] = useState("");
+  const [website, setWebsite] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [applyEventId, setApplyEventId] = useState("");
+  const [applyMessage, setApplyMessage] = useState("");
+  const [applyOrgId, setApplyOrgId] = useState("");
+  const [applyReceipt, setApplyReceipt] = useState("");
+
+  const upcoming = events.filter((event) => event.status !== "held" && event.status !== "cancelled");
+
+  const load = useCallback(async () => {
+    if (!signedIn) {
+      setOrgs([]);
+      return;
+    }
+    setLoadError("");
+    try {
+      const token = await getToken();
+      setOrgs(token ? await getMyOrganizations(token) : []);
+    } catch (error) {
+      setLoadError(describeFailure(error).message);
+      setOrgs([]);
+    }
+  }, [getToken, signedIn]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const startAdd = () => {
+    setEditingId(null);
+    setName("");
+    setWebsite("");
+    setFormError("");
+    setMode("add");
+  };
+  const startEdit = (org: ApiOrganization) => {
+    setEditingId(org.id);
+    setName(org.name);
+    setWebsite(org.website);
+    setFormError("");
+    setMode("add");
+  };
+
+  const saveOrg = async () => {
+    if (!name.trim()) {
+      setFormError("Add the organization name.");
+      return;
+    }
+    setSaving(true);
+    setFormError("");
+    try {
+      const token = await getToken();
+      if (!token) throw new ApiRequestError(401, "Sign in to save an organization.");
+      if (editingId) await updateMyOrganization(token, editingId, { name, website });
+      else await createMyOrganization(token, { name, website });
+      await load();
+      setMode("list");
+    } catch (error) {
+      setFormError(describeFailure(error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startApply = () => {
+    setApplyEventId(upcoming[0]?.id ?? "");
+    setApplyOrgId(orgs?.[0]?.id ?? "");
+    setApplyMessage("");
+    setApplyReceipt("");
+    setFormError("");
+    setMode("apply");
+  };
+
+  const submitApply = async () => {
+    const event = upcoming.find((e) => e.id === applyEventId);
+    const org = orgs?.find((o) => o.id === applyOrgId);
+    if (!event || !org) {
+      setFormError("Choose an event and an organization to apply.");
+      return;
+    }
+    setSaving(true);
+    setFormError("");
+    try {
+      const result = await submitPartnerApplication({
+        eventId: event.id,
+        companyName: org.name,
+        eventTitle: event.title ?? "",
+        organizationId: org.id,
+        contactName: identity.displayName === "Member" ? "" : identity.displayName,
+        email: identity.email && !identity.email.startsWith("guest@") ? identity.email : "",
+        website: org.website,
+        message: applyMessage,
+      });
+      setApplyReceipt(
+        result.reference
+          ? `Application received. Your reference is ${result.reference}.`
+          : "Your Partner application was received.",
+      );
+      setMode("list");
+    } catch (error) {
+      setFormError(describeFailure(error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (mode === "add") {
+    return (
+      <div className="screen-stack page-screen">
+        <button className="text-link back-link" type="button" onClick={() => setMode("list")}>
+          <ArrowLeft /> My Organization
+        </button>
+        <PageTitle
+          kicker="You"
+          title={editingId ? "Edit organization" : "Add organization"}
+          subtitle="The company you speak for when you apply as a Partner"
+        />
+        <form
+          className="profile-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveOrg();
+          }}
+        >
+          <label>
+            Organization name
+            <input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label>
+            Website
+            <input
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              placeholder="https://"
+            />
+          </label>
+          {formError ? <p role="alert">{formError}</p> : null}
+          <button type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save organization"}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  if (mode === "apply") {
+    return (
+      <div className="screen-stack page-screen">
+        <button className="text-link back-link" type="button" onClick={() => setMode("list")}>
+          <ArrowLeft /> My Organization
+        </button>
+        <PageTitle
+          kicker="You"
+          title="Apply as a Partner"
+          subtitle="Sponsor an upcoming AI Exchange with your organization"
+        />
+        <form
+          className="profile-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitApply();
+          }}
+        >
+          <label>
+            Event
+            <select value={applyEventId} onChange={(e) => setApplyEventId(e.target.value)}>
+              {upcoming.length === 0 ? <option value="">No upcoming events</option> : null}
+              {upcoming.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.title || event.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Organization
+            <select value={applyOrgId} onChange={(e) => setApplyOrgId(e.target.value)}>
+              {(orgs ?? []).map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Message
+            <textarea
+              value={applyMessage}
+              onChange={(e) => setApplyMessage(e.target.value)}
+              rows={4}
+              placeholder="How would you like to support this event?"
+            />
+          </label>
+          {formError ? <p role="alert">{formError}</p> : null}
+          <button type="submit" disabled={saving || upcoming.length === 0 || !applyOrgId}>
+            {saving ? "Submitting…" : "Submit application"}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="screen-stack page-screen">
       <PageTitle
@@ -4460,24 +4689,93 @@ function OrganizationView() {
         title="My Organization"
         subtitle="The company you speak for when you apply as a Partner"
       />
-      <section className="soft-hero">
-        <span className="soft-chip">No organization yet</span>
-        <h2>Add the company you represent</h2>
-        <p>
-          Link an organization when you apply as a Partner. Your organization details and Partner
-          application live in the PAAIPE portal; nothing is added to your account until you submit
-          one.
-        </p>
-      </section>
-      <div className="empty-note">
-        Adding and editing an organization is not connected in this build. This screen does not mean
-        your account has no organization.
-      </div>
+      {applyReceipt ? (
+        <div className="empty-note" role="status">
+          {applyReceipt}
+        </div>
+      ) : null}
+      {!signedIn ? (
+        <div className="empty-note">Sign in to manage your organizations.</div>
+      ) : orgs === null ? (
+        <div className="empty-note">Loading your organizations…</div>
+      ) : loadError ? (
+        <div className="empty-note">{loadError}</div>
+      ) : orgs.length === 0 ? (
+        <section className="soft-hero">
+          <span className="soft-chip">No organization yet</span>
+          <h2>Add the company you represent</h2>
+          <p>Link an organization, then apply to sponsor an upcoming AI Exchange as a Partner.</p>
+        </section>
+      ) : (
+        <div className="program-list">
+          {orgs.map((org) => (
+            <article className="program-card" key={org.id}>
+              <div>
+                <strong>{org.name}</strong>
+                {org.website ? <p>{org.website}</p> : null}
+                {org.status ? <span className={`soft-chip ${org.status === "active" ? "ok" : ""}`}>{org.status}</span> : null}
+              </div>
+              <button type="button" className="text-link" onClick={() => startEdit(org)}>
+                Edit
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
+      {signedIn ? (
+        <div className="cert-actions">
+          <button type="button" className="register-button" onClick={startAdd}>
+            Add organization
+          </button>
+          {orgs && orgs.length > 0 ? (
+            <button type="button" className="text-link" onClick={startApply}>
+              Apply as a Partner
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
-function CertificatesView() {
+function CertificatesView({
+  getToken,
+  signedIn,
+}: {
+  getToken: () => Promise<string | null>;
+  signedIn: boolean;
+}) {
   const [query, setQuery] = useState("");
+  const [state, setState] = useState<{ live: boolean; items: MeCertificate[] } | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!signedIn) {
+      setState({ live: false, items: [] });
+      return;
+    }
+    let alive = true;
+    setError("");
+    void (async () => {
+      try {
+        const token = await getToken();
+        const result = token ? await getMyCertificates(token) : { live: false, items: [] };
+        if (alive) setState(result);
+      } catch (loadError) {
+        if (alive) {
+          setError(describeFailure(loadError).message);
+          setState({ live: true, items: [] });
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [getToken, signedIn]);
+
+  const items = (state?.items ?? []).filter((cert) =>
+    cert.eventTitle.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+
   return (
     <div className="screen-stack page-screen">
       <PageTitle
@@ -4493,13 +4791,54 @@ function CertificatesView() {
           placeholder="Search by event name"
         />
       </label>
-      <div className="empty-note">
-        <strong>No certificates yet</strong>
-        <p>
-          A Certificate of Participation is issued after you attend a PAAIPE event. Once you have
-          one, it appears here to view and download.
-        </p>
-      </div>
+      {!signedIn ? (
+        <div className="empty-note">Sign in to see the certificates on your account.</div>
+      ) : state === null ? (
+        <div className="empty-note">Loading your certificates…</div>
+      ) : error ? (
+        <div className="empty-note">{error}</div>
+      ) : items.length === 0 ? (
+        <div className="empty-note">
+          <strong>No certificates yet</strong>
+          <p>
+            A Certificate of Participation is issued after you attend a PAAIPE event and submit
+            feedback. Once you have one, it appears here to view and download.
+          </p>
+        </div>
+      ) : (
+        <div className="program-list">
+          {items.map((cert) => (
+            <article className="program-card" key={cert.id || cert.eventId || cert.eventTitle}>
+              <div>
+                <strong>{cert.eventTitle || "PAAIPE event"}</strong>
+                {cert.eventDate || cert.series ? (
+                  <p>{[cert.series, cert.eventDate].filter(Boolean).join(" · ")}</p>
+                ) : null}
+                <div className="cert-actions">
+                  {cert.pdfUrl ? (
+                    <button
+                      type="button"
+                      className="text-link"
+                      onClick={() => void openExternalUrl(cert.pdfUrl)}
+                    >
+                      Download PDF
+                    </button>
+                  ) : null}
+                  {cert.pngUrl ? (
+                    <button
+                      type="button"
+                      className="text-link"
+                      onClick={() => void openExternalUrl(cert.pngUrl)}
+                    >
+                      View image
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -4551,7 +4890,9 @@ const PORTAL_PROGRAMS = [
   },
 ] as const;
 
-function ProgramsView({ onEvents }: { onEvents: () => void }) {
+function ProgramsView({ events, onEvents }: { events: ApiEvent[]; onEvents: () => void }) {
+  const nextExchange =
+    events.find((event) => event.status !== "held" && event.status !== "cancelled") || null;
   return (
     <div className="screen-stack page-screen">
       <PageTitle
@@ -4575,23 +4916,44 @@ function ProgramsView({ onEvents }: { onEvents: () => void }) {
         </div>
       </section>
       <div className="program-list">
-        {PORTAL_PROGRAMS.map((program) => (
-          <article className="program-card" key={program.name}>
-            <div>
-              <span className={`soft-chip ${program.tone}`}>{program.status}</span>
-              <strong>{program.name}</strong>
-              <p>{program.copy}</p>
-              {"detail" in program && program.detail ? (
-                <p className="program-detail">{program.detail}</p>
+        {PORTAL_PROGRAMS.map((program) => {
+          const isExchange = program.name === "AI Exchange";
+          const copy = isExchange && nextExchange
+            ? [
+                nextExchange.title,
+                [nextExchange.date, nextExchange.startTime].filter(Boolean).join(" · "),
+              ]
+                .filter(Boolean)
+                .join(" — ") || program.copy
+            : program.copy;
+          const status = isExchange
+            ? nextExchange
+              ? "Next Exchange scheduled"
+              : "No Exchange scheduled yet"
+            : program.status;
+          const detail = isExchange
+            ? nextExchange
+              ? nextExchange.topic || nextExchange.description || ""
+              : ""
+            : "detail" in program
+              ? program.detail
+              : "";
+          return (
+            <article className="program-card" key={program.name}>
+              <div>
+                <span className={`soft-chip ${program.tone}`}>{status}</span>
+                <strong>{program.name}</strong>
+                <p>{copy}</p>
+                {detail ? <p className="program-detail">{detail}</p> : null}
+              </div>
+              {"action" in program && program.action === "Events" ? (
+                <button className="state on" type="button" onClick={onEvents}>
+                  Events
+                </button>
               ) : null}
-            </div>
-            {"action" in program && program.action === "Events" ? (
-              <button className="state on" type="button" onClick={onEvents}>
-                Events
-              </button>
-            ) : null}
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
       <p className="program-tagline">Building the Philippines' AI-Powered Future — Together</p>
     </div>
