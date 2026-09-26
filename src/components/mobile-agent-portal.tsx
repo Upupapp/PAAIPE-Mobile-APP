@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import {
   Activity,
   ArrowLeft,
@@ -70,8 +78,11 @@ import {
   recordRegistrationEvent,
   readRegistrationTelemetry,
   offlineWriteRate,
+  postTelemetrySnapshot,
+  telemetryEndpointConfigured,
 } from "../lib/telemetry";
 import { fetchEventCounts, countsEndpointConfigured, type EventCounts } from "../lib/counts";
+import { notifyDevice } from "../lib/local-notify";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
 import { DataState, MembershipPanel, ProfileGate } from "./membership-panel";
 import { AppHaptics } from "../lib/app-haptics";
@@ -288,11 +299,29 @@ const PREVIEW_IDENTITY: DisplayIdentity = {
 };
 
 const PREVIEW_DIRECTORY: DirectoryMember[] = [
-  { uid: "d-ava", name: "Ava Cruz", initials: "AC", agentNumber: "0142", role: "Product lead, Northwind" },
+  {
+    uid: "d-ava",
+    name: "Ava Cruz",
+    initials: "AC",
+    agentNumber: "0142",
+    role: "Product lead, Northwind",
+  },
   { uid: "d-marco", name: "Marco Reyes", initials: "MR", agentNumber: "0098", role: "ML engineer" },
   { uid: "d-liza", name: "Liza Tan", initials: "LT", agentNumber: "0211", role: "Data scientist" },
-  { uid: "d-jomar", name: "Jomar Dela Cruz", initials: "JD", agentNumber: "0176", role: "Founder, Kalibrr AI" },
-  { uid: "d-nina", name: "Nina Villanueva", initials: "NV", agentNumber: "0203", role: "AI researcher" },
+  {
+    uid: "d-jomar",
+    name: "Jomar Dela Cruz",
+    initials: "JD",
+    agentNumber: "0176",
+    role: "Founder, Kalibrr AI",
+  },
+  {
+    uid: "d-nina",
+    name: "Nina Villanueva",
+    initials: "NV",
+    agentNumber: "0203",
+    role: "AI researcher",
+  },
 ];
 
 // Sample content shown only in preview so Home and Learnings are usable when the
@@ -307,8 +336,7 @@ const PREVIEW_EVENTS: ApiEvent[] = [
     date: "2nd Tuesday · monthly",
     startTime: "8:00 PM PHT",
     topic: "Sample topic — preview content",
-    description:
-      "Preview sample. Real Exchanges appear here when the association publishes them.",
+    description: "Preview sample. Real Exchanges appear here when the association publishes them.",
     coverUrl: "/banners/events/events-banner@1x.png",
   },
   {
@@ -366,7 +394,17 @@ function readyLoadable<T>(data: T): Loadable<T> {
 }
 
 export function MobileAgentPortal() {
-  const { ready, user, identity, profileState, profileSyncPending, signOut, refreshProfile, sendVerification, verificationNotice } = useAuth();
+  const {
+    ready,
+    user,
+    identity,
+    profileState,
+    profileSyncPending,
+    signOut,
+    refreshProfile,
+    sendVerification,
+    verificationNotice,
+  } = useAuth();
   const [publicCard, setPublicCard] = useState<PublicCard | null>(() => readPublicCard());
   const [preview, setPreview] = useState(false);
   const [directoryOffset, setDirectoryOffset] = useState(0);
@@ -376,7 +414,10 @@ export function MobileAgentPortal() {
   const portalIdentity = identity ?? (preview ? PREVIEW_IDENTITY : null);
   const accountKey = signedIn ? user!.uid : null;
   const liveEventData = useLoadable(showPortal && !usePreviewData ? "events" : null, getEvents);
-  const liveSessionData = useLoadable(showPortal && !usePreviewData ? "sessions" : null, getSessions);
+  const liveSessionData = useLoadable(
+    showPortal && !usePreviewData ? "sessions" : null,
+    getSessions,
+  );
   const eventData = usePreviewData ? readyLoadable(PREVIEW_EVENTS) : liveEventData;
   const sessionData = usePreviewData ? readyLoadable(PREVIEW_SESSIONS) : liveSessionData;
   const directoryData = useLoadable(
@@ -385,7 +426,8 @@ export function MobileAgentPortal() {
   );
   const events = eventData.data ?? [];
   const sessions = sessionData.data ?? [];
-  const baseDirectory = preview && !signedIn ? PREVIEW_DIRECTORY : directoryData.data?.members ?? [];
+  const baseDirectory =
+    preview && !signedIn ? PREVIEW_DIRECTORY : (directoryData.data?.members ?? []);
   const selfMember: DirectoryMember | null =
     publicCard && publicCard.directoryVisible && publicCard.name.trim()
       ? {
@@ -401,7 +443,7 @@ export function MobileAgentPortal() {
     ? [selfMember, ...baseDirectory.filter((m) => m.uid !== "self")]
     : baseDirectory;
   const directoryTotal =
-    (preview && !signedIn ? PREVIEW_DIRECTORY.length : directoryData.data?.total ?? 0) +
+    (preview && !signedIn ? PREVIEW_DIRECTORY.length : (directoryData.data?.total ?? 0)) +
     (selfMember ? 1 : 0);
   const [signOutError, setSignOutError] = useState("");
   const logout = async () => {
@@ -492,6 +534,9 @@ export function MobileAgentPortal() {
     const remote = await fetchMyRegistrations(email);
     if (!remote.length) return;
     const byEvent = (id: string) => backendEvents.find((event) => event.id === id) ?? null;
+    const before = ticketsRef.current;
+    const cancelledElsewhere: string[] = [];
+    const addedElsewhere: string[] = [];
     setTickets((current) => {
       let changed = false;
       const next = { ...current };
@@ -502,6 +547,7 @@ export function MobileAgentPortal() {
           if (existing && existing.reference === reg.id) {
             delete next[reg.eventId];
             changed = true;
+            cancelledElsewhere.push(existing.eventTitle);
           }
           continue;
         }
@@ -531,11 +577,48 @@ export function MobileAgentPortal() {
           ...(event?.coverUrl ? { coverUrl: event.coverUrl } : {}),
         };
         changed = true;
+        // Only announce registrations that appeared from another device, not a
+        // brand-new local sync we just performed (those are covered elsewhere).
+        if (!before[reg.eventId]) addedElsewhere.push(next[reg.eventId]!.eventTitle);
       }
       if (!changed) return current;
       writeTickets(next);
       return next;
     });
+    const notices: AppNotification[] = [];
+    for (const title of cancelledElsewhere) {
+      notices.push({
+        id: `n-xdev-cancel-${title}-${Date.now()}`,
+        title: "Registration cancelled",
+        body: `Your spot for ${title} was cancelled on another device.`,
+        at: Date.now(),
+        read: false,
+      });
+      void notifyDevice(
+        "Registration cancelled",
+        `Your spot for ${title} was cancelled on another device.`,
+      );
+    }
+    for (const title of addedElsewhere) {
+      notices.push({
+        id: `n-xdev-add-${title}-${Date.now()}`,
+        title: "Registration added",
+        body: `Your spot for ${title} is confirmed — registered on another device.`,
+        at: Date.now(),
+        read: false,
+      });
+      void notifyDevice(
+        "Registration added",
+        `Your spot for ${title} is confirmed — registered on another device.`,
+      );
+    }
+    if (notices.length) {
+      setNotifications((current) => {
+        const next = [...notices, ...current];
+        writeNotifications(next);
+        return next;
+      });
+    }
   }, [signedIn, user?.email, user?.emailVerified, user?.displayName, publicCard, eventData.data]);
 
   // Flush the queue and reconcile on mount, and again whenever the device comes
@@ -545,9 +628,11 @@ export function MobileAgentPortal() {
     if (!(signedIn && canSubmitRegistration())) return;
     void syncPendingRegistrations();
     void reconcileTickets();
+    void postTelemetrySnapshot();
     const onWake = () => {
       void syncPendingRegistrations();
       void reconcileTickets();
+      void postTelemetrySnapshot();
     };
     window.addEventListener("online", onWake);
     window.addEventListener("paaipe:resume", onWake);
@@ -556,7 +641,6 @@ export function MobileAgentPortal() {
       window.removeEventListener("paaipe:resume", onWake);
     };
   }, [signedIn, syncPendingRegistrations, reconcileTickets]);
-
 
   const triggerArrive = () => {
     setArriveTick((n) => n + 1);
@@ -747,7 +831,10 @@ export function MobileAgentPortal() {
     );
   }
 
-  if (!portalIdentity || (!preview && (profileState !== "ready" || identity?.status === "suspended")))
+  if (
+    !portalIdentity ||
+    (!preview && (profileState !== "ready" || identity?.status === "suspended"))
+  )
     return <ProfileGate />;
 
   const displayName = publicCard?.name.trim() || portalIdentity.displayName;
@@ -1062,9 +1149,7 @@ export function MobileAgentPortal() {
               setPosts={setFeedPosts}
             />
           )}
-          {active === "MemberProfile" && (
-            <MemberProfileView member={selectedMember} />
-          )}
+          {active === "MemberProfile" && <MemberProfileView member={selectedMember} />}
           {active === "Directory" && (
             <>
               {preview && !signedIn ? (
@@ -1118,9 +1203,7 @@ export function MobileAgentPortal() {
             />
           )}
           {active === "Certificates" && <CertificatesView />}
-          {active === "Programs" && (
-            <ProgramsView onEvents={() => selectBranch("Events")} />
-          )}
+          {active === "Programs" && <ProgramsView onEvents={() => selectBranch("Events")} />}
           {active === "Session" && (
             <SessionView
               session={selectedSession}
@@ -1437,7 +1520,9 @@ function HomeView({
               <div className="event-body">
                 <strong>{upcoming.title || "PAAIPE AI Exchange"}</strong>
                 <small>
-                  {upcoming.topic || upcoming.description || "Topic and speaker to be revealed soon"}
+                  {upcoming.topic ||
+                    upcoming.description ||
+                    "Topic and speaker to be revealed soon"}
                 </small>
               </div>
             </button>
@@ -1588,7 +1673,9 @@ function BannerArt({ kind }: { kind: string }) {
     return (
       <span className="scene scene-slides" aria-hidden="true">
         <span className="paper">
-          <i /><i /><i />
+          <i />
+          <i />
+          <i />
         </span>
       </span>
     );
@@ -1597,7 +1684,10 @@ function BannerArt({ kind }: { kind: string }) {
     return (
       <span className="scene scene-page" aria-hidden="true">
         <span className="paper">
-          <i /><i /><i /><i />
+          <i />
+          <i />
+          <i />
+          <i />
         </span>
       </span>
     );
@@ -1606,7 +1696,10 @@ function BannerArt({ kind }: { kind: string }) {
     return (
       <span className="scene scene-template" aria-hidden="true">
         <span className="paper">
-          <i /><i /><i /><i />
+          <i />
+          <i />
+          <i />
+          <i />
         </span>
       </span>
     );
@@ -1615,7 +1708,9 @@ function BannerArt({ kind }: { kind: string }) {
     return (
       <span className="scene scene-checks" aria-hidden="true">
         <span className="paper">
-          <i /><i /><i />
+          <i />
+          <i />
+          <i />
         </span>
       </span>
     );
@@ -1623,20 +1718,26 @@ function BannerArt({ kind }: { kind: string }) {
   if (tone === "micro") {
     return (
       <span className="scene scene-micro" aria-hidden="true">
-        <span className="phone"><Play /></span>
+        <span className="phone">
+          <Play />
+        </span>
       </span>
     );
   }
   if (tone === "playlist") {
     return (
       <span className="scene scene-playlist" aria-hidden="true">
-        <span /><span /><span />
+        <span />
+        <span />
+        <span />
       </span>
     );
   }
   return (
     <span className="scene scene-session" aria-hidden="true">
-      <span className="wide"><Play /></span>
+      <span className="wide">
+        <Play />
+      </span>
     </span>
   );
 }
@@ -1685,7 +1786,14 @@ function VisualCard({
   );
 }
 
-type FeedReel = { id: string; title: string; author: string; caption: string; src: string; poster: string };
+type FeedReel = {
+  id: string;
+  title: string;
+  author: string;
+  caption: string;
+  src: string;
+  poster: string;
+};
 
 const FEED_REELS: FeedReel[] = [
   {
@@ -1740,14 +1848,7 @@ function MicrosReels() {
     <div className="reels-feed" ref={containerRef}>
       {FEED_REELS.map((reel) => (
         <section className="reels-page" key={reel.id}>
-          <video
-            src={reel.src}
-            poster={reel.poster}
-            muted
-            loop
-            playsInline
-            preload="metadata"
-          />
+          <video src={reel.src} poster={reel.poster} muted loop playsInline preload="metadata" />
           <div className="reels-overlay">
             <strong>{reel.title}</strong>
             <small>{reel.author}</small>
@@ -1772,7 +1873,8 @@ function LearnView({
   onLane: (lane: LearnLane) => void;
   onOpen: (session: ApiSession) => void;
 }) {
-  const [fileFormat, setFileFormat] = useState<(typeof FILE_FORMATS)[number]["label"]>("All formats");
+  const [fileFormat, setFileFormat] =
+    useState<(typeof FILE_FORMATS)[number]["label"]>("All formats");
   const [formatsOpen, setFormatsOpen] = useState(false);
   const [library, setLibrary] = useState<"hub" | "recordings" | "slides">("hub");
   const [query, setQuery] = useState("");
@@ -1939,7 +2041,12 @@ function LearnView({
           </button>
           {formatsOpen ? (
             <div className="format-sheet" role="dialog" aria-modal="true" aria-label="File format">
-              <button className="format-backdrop" type="button" aria-label="Close formats" onClick={() => setFormatsOpen(false)} />
+              <button
+                className="format-backdrop"
+                type="button"
+                aria-label="Close formats"
+                onClick={() => setFormatsOpen(false)}
+              />
               <div className="format-panel">
                 <div className="format-panel-head">
                   <strong>File format</strong>
@@ -2070,13 +2177,17 @@ function EventFeedback({ eventId }: { eventId: string }) {
         </div>
         <div className="feedback-stars" aria-label={`You rated ${saved.rating} of 5`}>
           {[1, 2, 3, 4, 5].map((n) => (
-            <Star key={n} className={n <= saved.rating ? "on" : ""} fill={n <= saved.rating ? "currentColor" : "none"} />
+            <Star
+              key={n}
+              className={n <= saved.rating ? "on" : ""}
+              fill={n <= saved.rating ? "currentColor" : "none"}
+            />
           ))}
         </div>
         {saved.comment ? <p className="feedback-comment">“{saved.comment}”</p> : null}
         <p className="feedback-note">
-          Saved on this device. Sending feedback to PAAIPE is not connected in this build, so nothing
-          was submitted to the association.
+          Saved on this device. Sending feedback to PAAIPE is not connected in this build, so
+          nothing was submitted to the association.
         </p>
       </section>
     );
@@ -2190,12 +2301,7 @@ function VerifyGate({
       <span className="soft-chip warn">Verify your email</span>
       {title ? <strong>{title}</strong> : null}
       <p>{description}</p>
-      <button
-        type="button"
-        className="register-button"
-        disabled={resending}
-        onClick={handleResend}
-      >
+      <button type="button" className="register-button" disabled={resending} onClick={handleResend}>
         {resending ? "Sending…" : "Resend verification email"}
       </button>
       {message ? <p className="feedback-note">{message}</p> : null}
@@ -2213,6 +2319,8 @@ function DiagnosticsView({
   const [telemetry, setTelemetry] = useState(() => readRegistrationTelemetry());
   const [queueLen, setQueueLen] = useState(() => readRegistrationQueue().length);
   const [syncing, setSyncing] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState("");
   const refresh = () => {
     setTelemetry(readRegistrationTelemetry());
     setQueueLen(readRegistrationQueue().length);
@@ -2292,6 +2400,37 @@ function DiagnosticsView({
           </span>
           <ChevronRight />
         </button>
+        <button
+          type="button"
+          disabled={sending || !telemetryEndpointConfigured()}
+          onClick={() => {
+            setSending(true);
+            setSendMsg("");
+            void postTelemetrySnapshot().then(
+              (ok) => {
+                setSending(false);
+                setSendMsg(
+                  ok ? "Sent to the aggregate endpoint." : "Send failed — will retry on next wake.",
+                );
+              },
+              () => {
+                setSending(false);
+                setSendMsg("Send failed — will retry on next wake.");
+              },
+            );
+          }}
+        >
+          <Share2 />
+          <span>
+            <strong>{sending ? "Sending…" : "Send telemetry"}</strong>
+            <small>
+              {telemetryEndpointConfigured()
+                ? sendMsg || "Push anonymous counters to the fleet-wide endpoint"
+                : "Aggregate endpoint not configured in this build"}
+            </small>
+          </span>
+          <ChevronRight />
+        </button>
       </div>
     </div>
   );
@@ -2346,7 +2485,9 @@ function EventsView({
     void onSyncNow().then(
       (settled) => {
         setSyncing(false);
-        setSyncMsg(settled > 0 ? "Synced." : "Still waiting for a connection — will keep retrying.");
+        setSyncMsg(
+          settled > 0 ? "Synced." : "Still waiting for a connection — will keep retrying.",
+        );
       },
       () => {
         setSyncing(false);
@@ -2426,7 +2567,11 @@ function EventsView({
           >
             <label>
               Full name
-              <input value={regName} onChange={(event) => setRegName(event.target.value)} placeholder="Your name" />
+              <input
+                value={regName}
+                onChange={(event) => setRegName(event.target.value)}
+                placeholder="Your name"
+              />
             </label>
             <label>
               Email
@@ -2483,7 +2628,9 @@ function EventsView({
             />
             <div className="ticket-head">
               <img src={logo} alt="PAAIPE" />
-              <span className={`soft-chip ${ticket.synced ? "ok" : ticket.pending ? "warn" : "ok"}`}>
+              <span
+                className={`soft-chip ${ticket.synced ? "ok" : ticket.pending ? "warn" : "ok"}`}
+              >
                 {ticket.synced ? "Registered" : ticket.pending ? "Syncing…" : "Registered"}
               </span>
             </div>
@@ -2663,7 +2810,10 @@ function EventsView({
                 ["Q&A follow-ups", "Questions the speaker answered after the session"],
               ]
             : [
-                ["Live session", selected.startTime ? `Starts ${selected.startTime}` : "Time to be announced"],
+                [
+                  "Live session",
+                  selected.startTime ? `Starts ${selected.startTime}` : "Time to be announced",
+                ],
                 ["Speaker", "Introduced at the start of the session"],
                 ["Q&A", "Ask questions live during the session"],
                 ["Certificate", "Issued after you attend and give feedback"],
@@ -2674,7 +2824,9 @@ function EventsView({
                 <strong>{title}</strong>
                 <p>{copy}</p>
               </div>
-              <span className="state">{held && title === "Session recording" ? "Watch" : "Info"}</span>
+              <span className="state">
+                {held && title === "Session recording" ? "Watch" : "Info"}
+              </span>
             </article>
           ))}
         </div>
@@ -2717,12 +2869,7 @@ function EventsView({
             {pendingCount} registration{pendingCount === 1 ? "" : "s"} pending —{" "}
             {syncMsg || "will sync when you're back online."}
           </span>
-          <button
-            type="button"
-            className="sync-now"
-            disabled={syncing}
-            onClick={handleSyncNow}
-          >
+          <button type="button" className="sync-now" disabled={syncing} onClick={handleSyncNow}>
             {syncing ? "Syncing…" : "Sync now"}
           </button>
         </div>
@@ -2738,9 +2885,16 @@ function EventsView({
           <div className="empty-note">No {period.toLowerCase()} events right now.</div>
         ) : (
           list.map((event) => (
-            <article className="teresa-event-card" key={event.id} onClick={() => openEvent(event.id)} role="button" tabIndex={0} onKeyDown={(eventKey) => {
-              if (eventKey.key === "Enter") openEvent(event.id);
-            }}>
+            <article
+              className="teresa-event-card"
+              key={event.id}
+              onClick={() => openEvent(event.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(eventKey) => {
+                if (eventKey.key === "Enter") openEvent(event.id);
+              }}
+            >
               <div className="event-poster">
                 {event.coverUrl ? (
                   <img src={event.coverUrl} alt="" loading="lazy" />
@@ -2803,8 +2957,7 @@ function EventsView({
 
 type FeedComment = { id: string; author: string; body: string };
 type FeedMedia =
-  | { kind: "image"; src: string; alt: string }
-  | { kind: "video"; src: string; poster: string };
+  { kind: "image"; src: string; alt: string } | { kind: "video"; src: string; poster: string };
 type FeedPost = {
   id: string;
   author: string;
@@ -2856,7 +3009,11 @@ const FEED_SEED: FeedPost[] = [
     likes: 12,
     liked: false,
     comments: [
-      { id: "c-next-1", author: "PAAIPE", body: "Great thread — drop them here and we'll pass the best ones on." },
+      {
+        id: "c-next-1",
+        author: "PAAIPE",
+        body: "Great thread — drop them here and we'll pass the best ones on.",
+      },
     ],
   },
 ];
@@ -2969,16 +3126,16 @@ function FeedView({
   return (
     <div className="screen-stack animate-fade-in page-screen feed-screen">
       <form
-        className={composerActive || draft || attachment ? "feed-composer is-active" : "feed-composer"}
+        className={
+          composerActive || draft || attachment ? "feed-composer is-active" : "feed-composer"
+        }
         onSubmit={(event) => {
           event.preventDefault();
           publish();
         }}
       >
         <div className="feed-composer-row">
-          <div className="avatar">
-            {photo ? <img src={photo} alt="" /> : initials}
-          </div>
+          <div className="avatar">{photo ? <img src={photo} alt="" /> : initials}</div>
           <textarea
             ref={draftRef}
             value={draft}
@@ -3147,7 +3304,12 @@ function FeedView({
       ))}
       {sharePost ? (
         <div className="format-sheet" role="dialog" aria-modal="true" aria-label="Share post">
-          <button className="format-backdrop" type="button" aria-label="Close share" onClick={() => setSharePost(null)} />
+          <button
+            className="format-backdrop"
+            type="button"
+            aria-label="Close share"
+            onClick={() => setSharePost(null)}
+          />
           <div className="format-panel">
             <div className="format-panel-head">
               <strong>Share</strong>
@@ -3156,18 +3318,34 @@ function FeedView({
               </button>
             </div>
             <div className="feed-share">
-              <button type="button" onClick={() => share("facebook")}>Facebook</button>
-              <button type="button" onClick={() => share("linkedin")}>LinkedIn</button>
-              <button type="button" onClick={() => share("x")}>X</button>
+              <button type="button" onClick={() => share("facebook")}>
+                Facebook
+              </button>
+              <button type="button" onClick={() => share("linkedin")}>
+                LinkedIn
+              </button>
+              <button type="button" onClick={() => share("x")}>
+                X
+              </button>
             </div>
           </div>
         </div>
       ) : null}
       {reel ? (
         <div className="reel-viewer" role="dialog" aria-modal="true" aria-label={reel.title}>
-          <button className="reel-backdrop" type="button" aria-label="Close reel" onClick={() => setReel(null)} />
+          <button
+            className="reel-backdrop"
+            type="button"
+            aria-label="Close reel"
+            onClick={() => setReel(null)}
+          />
           <div className="reel-stage">
-            <button className="reel-close icon-button" type="button" aria-label="Close" onClick={() => setReel(null)}>
+            <button
+              className="reel-close icon-button"
+              type="button"
+              aria-label="Close"
+              onClick={() => setReel(null)}
+            >
               <X />
             </button>
             <video src={reel.src} poster={reel.poster} controls autoPlay playsInline />
@@ -3207,7 +3385,12 @@ function ProfileView({
   return (
     <div className="screen-stack animate-fade-in page-screen profile-screen">
       <section className="profile-hero">
-        <button className="avatar profile-avatar" type="button" onClick={onPreview} aria-label="Preview public profile">
+        <button
+          className="avatar profile-avatar"
+          type="button"
+          onClick={onPreview}
+          aria-label="Preview public profile"
+        >
           {photo ? <img src={photo} alt="" /> : identity.initials}
         </button>
         <h1>{identity.displayName}</h1>
@@ -3369,7 +3552,9 @@ function EditProfileView({
       await onSave({ name, headline, about, work, link, photo, directoryVisible });
       setSaved(true);
     } catch {
-      setError("The name could not be saved to your account. The public preview on this device was kept.");
+      setError(
+        "The name could not be saved to your account. The public preview on this device was kept.",
+      );
     } finally {
       setSaving(false);
     }
@@ -3413,7 +3598,11 @@ function EditProfileView({
               hidden
               onChange={(event) => pickPhoto(event.target.files?.[0])}
             />
-            <button type="button" className="composer-media" onClick={() => photoRef.current?.click()}>
+            <button
+              type="button"
+              className="composer-media"
+              onClick={() => photoRef.current?.click()}
+            >
               <ImagePlus />
               {photo ? "Change photo" : "Upload photo"}
             </button>
@@ -3437,19 +3626,36 @@ function EditProfileView({
         </label>
         <label>
           Headline
-          <input value={headline} onChange={(event) => setHeadline(event.target.value)} placeholder="What you do" />
+          <input
+            value={headline}
+            onChange={(event) => setHeadline(event.target.value)}
+            placeholder="What you do"
+          />
         </label>
         <label>
           About
-          <textarea value={about} onChange={(event) => setAbout(event.target.value)} rows={4} placeholder="A short introduction" />
+          <textarea
+            value={about}
+            onChange={(event) => setAbout(event.target.value)}
+            rows={4}
+            placeholder="A short introduction"
+          />
         </label>
         <label>
           Work
-          <input value={work} onChange={(event) => setWork(event.target.value)} placeholder="Role and organization" />
+          <input
+            value={work}
+            onChange={(event) => setWork(event.target.value)}
+            placeholder="Role and organization"
+          />
         </label>
         <label>
           Link
-          <input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://" />
+          <input
+            value={link}
+            onChange={(event) => setLink(event.target.value)}
+            placeholder="https://"
+          />
         </label>
         <label className="check-row">
           <input
@@ -3469,7 +3675,13 @@ function EditProfileView({
   );
 }
 
-function PublicProfileView({ identity, card }: { identity: DisplayIdentity; card: PublicCard | null }) {
+function PublicProfileView({
+  identity,
+  card,
+}: {
+  identity: DisplayIdentity;
+  card: PublicCard | null;
+}) {
   const headline = card?.headline.trim() || "";
   const about = card?.about.trim() || "";
   const work = card?.work.trim() || "";
@@ -3549,12 +3761,12 @@ function DirectoryView({
         <div className="member-list">
           {shown.map((m) => (
             <button className="member-card" type="button" key={m.uid} onClick={() => onOpen(m)}>
-              <div className="avatar">
-                {m.photo ? <img src={m.photo} alt="" /> : m.initials}
-              </div>
+              <div className="avatar">{m.photo ? <img src={m.photo} alt="" /> : m.initials}</div>
               <div>
                 <strong>{m.name}</strong>
-                <span>{m.role || (m.agentNumber ? `Agent ${m.agentNumber}` : "Confirmed Agent")}</span>
+                <span>
+                  {m.role || (m.agentNumber ? `Agent ${m.agentNumber}` : "Confirmed Agent")}
+                </span>
               </div>
               <ChevronRight />
             </button>
@@ -3766,9 +3978,7 @@ function ProgramsView({ onEvents }: { onEvents: () => void }) {
           </article>
         ))}
       </div>
-      <p className="program-tagline">
-        Building the Philippines' AI-Powered Future — Together
-      </p>
+      <p className="program-tagline">Building the Philippines' AI-Powered Future — Together</p>
     </div>
   );
 }
@@ -3797,13 +4007,19 @@ function SessionView({
       <div className="session-player">
         <img src={session?.posterUrl || eventCover} alt="" />
         {videoUrl ? (
-          <button className="session-watch" type="button" onClick={() => void openExternalUrl(videoUrl)}>
+          <button
+            className="session-watch"
+            type="button"
+            onClick={() => void openExternalUrl(videoUrl)}
+          >
             <Play fill="currentColor" />
             Watch
           </button>
         ) : null}
       </div>
-      {!videoUrl && <div className="empty-note">A recording is not available for this session yet.</div>}
+      {!videoUrl && (
+        <div className="empty-note">A recording is not available for this session yet.</div>
+      )}
       <h2 className="subheading">Speaker</h2>
       <article className="program-card speaker-card">
         <div className="avatar speaker-avatar">
@@ -3829,7 +4045,9 @@ function SessionView({
       <h2 className="subheading">Chapters</h2>
       <div className="empty-note">No chapters are published for this recording yet.</div>
       <h2 className="subheading">Q&A follow-ups</h2>
-      <div className="empty-note">Questions the speaker answered after the session will appear here.</div>
+      <div className="empty-note">
+        Questions the speaker answered after the session will appear here.
+      </div>
       <div className="settings-list">
         <button type="button" onClick={onResources}>
           <Presentation />
@@ -3848,7 +4066,9 @@ function SessionView({
           <ChevronRight />
         </button>
       </div>
-      <div className="empty-note">Report a playback problem from the association if the recording will not play.</div>
+      <div className="empty-note">
+        Report a playback problem from the association if the recording will not play.
+      </div>
     </div>
   );
 }

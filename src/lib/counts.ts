@@ -44,7 +44,10 @@ export async function fetchEventCounts(timeoutMs = 8000): Promise<EventCounts | 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "application/json" } });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    });
     if (!response.ok) return null;
     return parseCounts(await response.json());
   } catch {

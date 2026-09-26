@@ -28,6 +28,7 @@
     "@capacitor/core": "^8",
     "@capacitor/haptics": "^8",
     "@capacitor/ios": "^8",
+    "@capacitor/local-notifications": "^8",
     "@capacitor/splash-screen": "^8",
     "@capacitor/status-bar": "^8",
     "@hookform/resolvers": "^5.2.2",

@@ -311,9 +311,17 @@
   border-radius: 4px 4px 0 0;
   background: rgba(255, 255, 255, 0.85);
 }
-.portal-shell.teresa-inside .scene-playlist span:nth-child(1) { height: 28px; opacity: 0.55; }
-.portal-shell.teresa-inside .scene-playlist span:nth-child(2) { height: 44px; }
-.portal-shell.teresa-inside .scene-playlist span:nth-child(3) { height: 34px; opacity: 0.75; }
+.portal-shell.teresa-inside .scene-playlist span:nth-child(1) {
+  height: 28px;
+  opacity: 0.55;
+}
+.portal-shell.teresa-inside .scene-playlist span:nth-child(2) {
+  height: 44px;
+}
+.portal-shell.teresa-inside .scene-playlist span:nth-child(3) {
+  height: 34px;
+  opacity: 0.75;
+}
 .portal-shell.teresa-inside .visual-copy {
   display: grid;
   gap: 4px;
