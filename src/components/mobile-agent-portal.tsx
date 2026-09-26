@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
+  Activity,
   ArrowLeft,
   Award,
   Bell,
@@ -65,7 +66,11 @@ import {
   cancelMyRegistration,
   readRegistrationQueue,
 } from "../lib/registrations";
-import { recordRegistrationEvent } from "../lib/telemetry";
+import {
+  recordRegistrationEvent,
+  readRegistrationTelemetry,
+  offlineWriteRate,
+} from "../lib/telemetry";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
 import { DataState, MembershipPanel, ProfileGate } from "./membership-panel";
 import { AppHaptics } from "../lib/app-haptics";
@@ -81,7 +86,8 @@ type Detail =
   | "Session"
   | "EditProfile"
   | "PublicProfile"
-  | "MemberProfile";
+  | "MemberProfile"
+  | "Diagnostics";
 type View = Branch | Detail | "Feed";
 type LearnLane = "Sessions" | "Micros" | "Playlists" | "Resources";
 
@@ -128,6 +134,7 @@ const detailTitles: Record<Detail, string> = {
   EditProfile: "Edit profile",
   PublicProfile: "Your public profile",
   MemberProfile: "Profile",
+  Diagnostics: "Diagnostics",
 };
 
 const accountMenu: Array<{ label: string; view: View; icon: typeof Home }> = [
@@ -143,6 +150,7 @@ const generalMenu: Array<{ label: string; view: View; icon: typeof Home; lane?: 
   { label: "Member benefits", view: "Benefits", icon: Gift },
   { label: "Resources", view: "Learn", icon: FileText, lane: "Resources" },
   { label: "Organization", view: "Organization", icon: Building2 },
+  { label: "Diagnostics", view: "Diagnostics", icon: Activity },
 ];
 
 function MiniLogo() {
@@ -200,6 +208,9 @@ export type EventTicket = {
   /** A signed-in member's write that failed to send and is queued to resend. */
   pending?: boolean;
 };
+
+/** How a cancellation resolved, so the UI can distinguish server vs. local. */
+export type CancelOutcome = "server" | "local" | "failed";
 
 export type AppNotification = {
   id: string;
@@ -423,123 +434,123 @@ export function MobileAgentPortal() {
   const ticketsRef = useRef(tickets);
   ticketsRef.current = tickets;
 
-  // Resend any registration whose backend write failed on a flaky network. Runs
-  // on mount and whenever the device comes back online or the app resumes. The
+  // Resend any registration whose backend write failed on a flaky network. The
   // write reuses the original client-minted id, so a resend cannot duplicate it.
-  useEffect(() => {
-    if (!(signedIn && canSubmitRegistration())) return;
-    let active = true;
-    const run = async () => {
-      const settled = await flushRegistrationQueue();
-      if (!active || !settled.length) return;
-      const currentTickets = ticketsRef.current;
-      const confirmed: Array<{ eventId: string; title: string }> = [];
-      for (const { registrationId, eventId } of settled) {
-        const ticket = currentTickets[eventId];
-        if (ticket && ticket.reference === registrationId && !ticket.synced)
-          confirmed.push({ eventId, title: ticket.eventTitle });
+  // Returns how many items settled so a manual "Sync now" can report a result.
+  const syncPendingRegistrations = useCallback(async (): Promise<number> => {
+    const settled = await flushRegistrationQueue();
+    if (!settled.length) return 0;
+    const currentTickets = ticketsRef.current;
+    const confirmed: Array<{ eventId: string; title: string }> = [];
+    for (const { registrationId, eventId } of settled) {
+      const ticket = currentTickets[eventId];
+      if (ticket && ticket.reference === registrationId && !ticket.synced)
+        confirmed.push({ eventId, title: ticket.eventTitle });
+    }
+    if (!confirmed.length) return settled.length;
+    setTickets((current) => {
+      const next = { ...current };
+      for (const { eventId } of confirmed) {
+        const ticket = next[eventId];
+        if (ticket) next[eventId] = { ...ticket, synced: true, pending: false };
       }
-      if (!confirmed.length) return;
-      setTickets((current) => {
-        const next = { ...current };
-        for (const { eventId } of confirmed) {
-          const ticket = next[eventId];
-          if (ticket) next[eventId] = { ...ticket, synced: true, pending: false };
-        }
-        writeTickets(next);
-        return next;
-      });
-      setNotifications((current) => {
-        const existing = new Set(current.map((item) => item.id));
-        const fresh = confirmed
-          .map(({ eventId, title }) => ({
-            id: `n-sync-${eventId}`,
-            title: "Registration synced",
-            body: `Your spot for ${title} is now confirmed with PAAIPE.`,
-            at: Date.now(),
-            read: false,
-          }))
-          .filter((item) => !existing.has(item.id));
-        if (!fresh.length) return current;
-        const next = [...fresh, ...current];
-        writeNotifications(next);
-        return next;
-      });
-    };
-    void run();
-    const onWake = () => void run();
-    window.addEventListener("online", onWake);
-    window.addEventListener("paaipe:resume", onWake);
-    return () => {
-      active = false;
-      window.removeEventListener("online", onWake);
-      window.removeEventListener("paaipe:resume", onWake);
-    };
-  }, [signedIn]);
+      writeTickets(next);
+      return next;
+    });
+    setNotifications((current) => {
+      const existing = new Set(current.map((item) => item.id));
+      const fresh = confirmed
+        .map(({ eventId, title }) => ({
+          id: `n-sync-${eventId}`,
+          title: "Registration synced",
+          body: `Your spot for ${title} is now confirmed with PAAIPE.`,
+          at: Date.now(),
+          read: false,
+        }))
+        .filter((item) => !existing.has(item.id));
+      if (!fresh.length) return current;
+      const next = [...fresh, ...current];
+      writeNotifications(next);
+      return next;
+    });
+    return settled.length;
+  }, []);
 
-  // Reconcile local tickets against the backend on launch so a member's
-  // registrations follow them across devices. We read the member's own rows
-  // (allowed for a verified owner by email), add a ticket for any active
-  // registration missing locally, and drop a local ticket the member cancelled
-  // elsewhere. Locally-pending (un-synced) tickets are left untouched.
-  useEffect(() => {
+  // Reconcile local tickets against the backend so a member's registrations
+  // follow them across devices. Reads the member's own rows (allowed for a
+  // verified owner by email), adds a ticket for any active registration missing
+  // locally, and drops a local ticket the member cancelled elsewhere.
+  // Locally-pending (un-synced) tickets are left untouched.
+  const reconcileTickets = useCallback(async (): Promise<void> => {
     const email = user?.email ?? "";
     if (!(signedIn && canSubmitRegistration() && user?.emailVerified && email)) return;
     const backendEvents = eventData.data ?? [];
-    let active = true;
-    void (async () => {
-      const remote = await fetchMyRegistrations(email);
-      if (!active || !remote.length) return;
-      const byEvent = (id: string) => backendEvents.find((event) => event.id === id) ?? null;
-      setTickets((current) => {
-        let changed = false;
-        const next = { ...current };
-        for (const reg of remote) {
-          if (!reg.eventId) continue;
-          const existing = next[reg.eventId];
-          if (reg.cancelled) {
-            // Cancelled elsewhere — remove the matching on-device pass.
-            if (existing && existing.reference === reg.id) {
-              delete next[reg.eventId];
-              changed = true;
-            }
-            continue;
+    const remote = await fetchMyRegistrations(email);
+    if (!remote.length) return;
+    const byEvent = (id: string) => backendEvents.find((event) => event.id === id) ?? null;
+    setTickets((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const reg of remote) {
+        if (!reg.eventId) continue;
+        const existing = next[reg.eventId];
+        if (reg.cancelled) {
+          if (existing && existing.reference === reg.id) {
+            delete next[reg.eventId];
+            changed = true;
           }
-          if (existing) {
-            if (!existing.synced || existing.pending) {
-              next[reg.eventId] = { ...existing, synced: true, pending: false, reference: reg.id };
-              changed = true;
-            }
-            continue;
-          }
-          const event = byEvent(reg.eventId);
-          next[reg.eventId] = {
-            eventId: reg.eventId,
-            eventTitle: event?.title || reg.event || "PAAIPE event",
-            eventDate: event?.date || "Date to be announced",
-            eventTime: event?.startTime
-              ? `${event.startTime}${event.endTime ? ` – ${event.endTime}` : ""}`
-              : "",
-            attendeeName: publicCard?.name?.trim() || user?.displayName || "Member",
-            attendeeEmail: email,
-            note: "",
-            code: ticketCode(reg.eventId),
-            reference: reg.id,
-            createdAt: new Date().toISOString(),
-            synced: true,
-            pending: false,
-          };
-          changed = true;
+          continue;
         }
-        if (!changed) return current;
-        writeTickets(next);
-        return next;
-      });
-    })();
-    return () => {
-      active = false;
+        if (existing) {
+          if (!existing.synced || existing.pending) {
+            next[reg.eventId] = { ...existing, synced: true, pending: false, reference: reg.id };
+            changed = true;
+          }
+          continue;
+        }
+        const event = byEvent(reg.eventId);
+        next[reg.eventId] = {
+          eventId: reg.eventId,
+          eventTitle: event?.title || reg.event || "PAAIPE event",
+          eventDate: event?.date || "Date to be announced",
+          eventTime: event?.startTime
+            ? `${event.startTime}${event.endTime ? ` – ${event.endTime}` : ""}`
+            : "",
+          attendeeName: publicCard?.name?.trim() || user?.displayName || "Member",
+          attendeeEmail: email,
+          note: "",
+          code: ticketCode(reg.eventId),
+          reference: reg.id,
+          createdAt: new Date().toISOString(),
+          synced: true,
+          pending: false,
+        };
+        changed = true;
+      }
+      if (!changed) return current;
+      writeTickets(next);
+      return next;
+    });
+  }, [signedIn, user?.email, user?.emailVerified, user?.displayName, publicCard, eventData.data]);
+
+  // Flush the queue and reconcile on mount, and again whenever the device comes
+  // back online or the app resumes — cross-device changes appear without a cold
+  // start, and offline writes resend as soon as connectivity returns.
+  useEffect(() => {
+    if (!(signedIn && canSubmitRegistration())) return;
+    void syncPendingRegistrations();
+    void reconcileTickets();
+    const onWake = () => {
+      void syncPendingRegistrations();
+      void reconcileTickets();
     };
-  }, [signedIn, user?.email, user?.emailVerified, eventData.data]);
+    window.addEventListener("online", onWake);
+    window.addEventListener("paaipe:resume", onWake);
+    return () => {
+      window.removeEventListener("online", onWake);
+      window.removeEventListener("paaipe:resume", onWake);
+    };
+  }, [signedIn, syncPendingRegistrations, reconcileTickets]);
 
 
   const triggerArrive = () => {
@@ -833,7 +844,7 @@ export function MobileAgentPortal() {
     await sendVerification();
     await refreshProfile();
   };
-  const cancelRegistration = async (eventId: string) => {
+  const cancelRegistration = async (eventId: string): Promise<CancelOutcome> => {
     const ticket = ticketsRef.current[eventId];
     // A synced registration cannot be deleted (rules forbid client deletes), so a
     // member cancel is a server-side status:'cancelled' update on their own row.
@@ -843,17 +854,22 @@ export function MobileAgentPortal() {
         await cancelMyRegistration(ticket.reference);
         recordRegistrationEvent("cancel_success");
       } catch {
+        // Couldn't reach the backend — keep the ticket so state stays truthful
+        // (reconcile still shows it registered) and let the member retry.
         recordRegistrationEvent("cancel_failure");
+        return "failed";
       }
     } else if (ticket && !ticket.synced) {
       dequeueRegistration(ticket.reference);
     }
+    const outcome: CancelOutcome = ticket?.synced ? "server" : "local";
     setTickets((current) => {
       const next = { ...current };
       delete next[eventId];
       writeTickets(next);
       return next;
     });
+    return outcome;
   };
   const markNotificationsRead = () => {
     setNotifications((current) => {
@@ -986,6 +1002,7 @@ export function MobileAgentPortal() {
               onResendVerification={resendVerification}
               verificationNotice={verificationNotice}
               pendingCount={pendingRegistrations}
+              onSyncNow={syncPendingRegistrations}
             />
           )}
           {active === "Profile" && (
@@ -1069,6 +1086,12 @@ export function MobileAgentPortal() {
           )}
           {active === "Benefits" && <BenefitsView />}
           {active === "Organization" && <OrganizationView />}
+          {active === "Diagnostics" && (
+            <DiagnosticsView
+              pendingCount={pendingRegistrations}
+              onSyncNow={syncPendingRegistrations}
+            />
+          )}
           {active === "Certificates" && <CertificatesView />}
           {active === "Programs" && (
             <ProgramsView onEvents={() => selectBranch("Events")} />
@@ -2096,6 +2119,159 @@ function QrImage({ value }: { value: string }) {
   );
 }
 
+function VerifyGate({
+  variant,
+  title,
+  description,
+  onResend,
+  notice,
+}: {
+  variant: "card" | "banner";
+  title?: string;
+  description: string;
+  onResend: () => Promise<void>;
+  notice: string | null;
+}) {
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
+  const handleResend = () => {
+    setResending(true);
+    setResendMsg("");
+    void onResend().then(
+      () => setResending(false),
+      () => {
+        setResending(false);
+        setResendMsg("Could not send the verification email just now. Please try again shortly.");
+      },
+    );
+  };
+  const message = resendMsg || notice;
+  if (variant === "banner") {
+    return (
+      <div className="sync-banner" role="status">
+        <Mail />
+        <span>
+          {description}{" "}
+          <button type="button" className="text-link" disabled={resending} onClick={handleResend}>
+            {resending ? "Sending…" : "Resend verification email"}
+          </button>
+          {message ? ` ${message}` : ""}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <>
+      <span className="soft-chip warn">Verify your email</span>
+      {title ? <strong>{title}</strong> : null}
+      <p>{description}</p>
+      <button
+        type="button"
+        className="register-button"
+        disabled={resending}
+        onClick={handleResend}
+      >
+        {resending ? "Sending…" : "Resend verification email"}
+      </button>
+      {message ? <p className="feedback-note">{message}</p> : null}
+    </>
+  );
+}
+
+function DiagnosticsView({
+  pendingCount,
+  onSyncNow,
+}: {
+  pendingCount: number;
+  onSyncNow: () => Promise<number>;
+}) {
+  const [telemetry, setTelemetry] = useState(() => readRegistrationTelemetry());
+  const [queueLen, setQueueLen] = useState(() => readRegistrationQueue().length);
+  const [syncing, setSyncing] = useState(false);
+  const refresh = () => {
+    setTelemetry(readRegistrationTelemetry());
+    setQueueLen(readRegistrationQueue().length);
+  };
+  const rate = offlineWriteRate(telemetry);
+  const c = telemetry.counts;
+  const rows: Array<[string, number]> = [
+    ["Writes confirmed", c.write_success],
+    ["Writes queued (offline)", c.write_queued],
+    ["Writes failed", c.write_failure],
+    ["Queue flushes settled", c.queue_flush_settled],
+    ["Cancels confirmed", c.cancel_success],
+    ["Cancels failed", c.cancel_failure],
+  ];
+  return (
+    <div className="screen-stack animate-fade-in page-screen">
+      <PageTitle
+        kicker="Internal"
+        title="Diagnostics"
+        subtitle="Local registration sync telemetry. Nothing here leaves this device."
+      />
+      <section className="section-block">
+        <div className="stat-grid">
+          <div className="stat-cell">
+            <strong>{rate === null ? "—" : `${Math.round(rate * 100)}%`}</strong>
+            <small>Offline write rate</small>
+          </div>
+          <div className="stat-cell">
+            <strong>{queueLen}</strong>
+            <small>Queued now</small>
+          </div>
+          <div className="stat-cell">
+            <strong>{pendingCount}</strong>
+            <small>Pending tickets</small>
+          </div>
+        </div>
+      </section>
+      <section className="section-block">
+        <dl className="ticket-details">
+          {rows.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="feedback-note">
+          {telemetry.updatedAt
+            ? `Last event ${new Date(telemetry.updatedAt).toLocaleString()}.`
+            : "No registration activity recorded on this device yet."}
+        </p>
+      </section>
+      <div className="settings-list">
+        <button
+          type="button"
+          disabled={syncing || pendingCount === 0}
+          onClick={() => {
+            setSyncing(true);
+            void onSyncNow().finally(() => {
+              setSyncing(false);
+              refresh();
+            });
+          }}
+        >
+          <RefreshCw className={syncing ? "spin" : ""} />
+          <span>
+            <strong>{syncing ? "Syncing…" : "Flush queue now"}</strong>
+            <small>Resend any queued registrations</small>
+          </span>
+          <ChevronRight />
+        </button>
+        <button type="button" onClick={refresh}>
+          <Activity />
+          <span>
+            <strong>Refresh</strong>
+            <small>Re-read local telemetry</small>
+          </span>
+          <ChevronRight />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function EventsView({
   events,
   loadState,
@@ -2107,6 +2283,7 @@ function EventsView({
   onResendVerification,
   verificationNotice,
   pendingCount,
+  onSyncNow,
 }: {
   events: ApiEvent[];
   loadState: Loadable<ApiEvent[]>;
@@ -2116,11 +2293,12 @@ function EventsView({
     event: ApiEvent,
     form: { name: string; email: string; note: string },
   ) => Promise<EventTicket>;
-  onCancel: (eventId: string) => void | Promise<void>;
+  onCancel: (eventId: string) => Promise<CancelOutcome>;
   needsVerification: boolean;
   onResendVerification: () => Promise<void>;
   verificationNotice: string | null;
   pendingCount: number;
+  onSyncNow: () => Promise<number>;
 }) {
   const [period, setPeriod] = useState<"Upcoming" | "Past">("Upcoming");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -2131,16 +2309,21 @@ function EventsView({
   const [submitting, setSubmitting] = useState(false);
   const [regError, setRegError] = useState("");
   const [copied, setCopied] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [resendMsg, setResendMsg] = useState("");
-  const handleResend = () => {
-    setResending(true);
-    setResendMsg("");
-    void onResendVerification().then(
-      () => setResending(false),
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelNotice, setCancelNotice] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const handleSyncNow = () => {
+    setSyncing(true);
+    setSyncMsg("");
+    void onSyncNow().then(
+      (settled) => {
+        setSyncing(false);
+        setSyncMsg(settled > 0 ? "Synced." : "Still waiting for a connection — will keep retrying.");
+      },
       () => {
-        setResending(false);
-        setResendMsg("Could not send the verification email just now. Please try again shortly.");
+        setSyncing(false);
+        setSyncMsg("Couldn't sync just now — will keep retrying automatically.");
       },
     );
   };
@@ -2153,6 +2336,7 @@ function EventsView({
     setSelectedId(id);
     setFlow("detail");
     setCopied(false);
+    setCancelNotice("");
   };
   const startRegister = () => {
     setRegName(identity.displayName === "Member" ? "" : identity.displayName);
@@ -2311,19 +2495,52 @@ function EventsView({
           <div className="settings-list">
             <button
               type="button"
+              disabled={cancelling}
               onClick={() => {
-                onCancel(selected.id);
-                setFlow("detail");
+                const eventId = selected.id;
+                const wasSynced = ticket.synced;
+                setCancelling(true);
+                setCancelNotice("");
+                void onCancel(eventId).then(
+                  (outcome) => {
+                    setCancelling(false);
+                    if (outcome === "failed") {
+                      setCancelNotice(
+                        "Couldn't reach PAAIPE to cancel — you're still registered. Try again when you're back online.",
+                      );
+                      return;
+                    }
+                    setCancelNotice(
+                      outcome === "server"
+                        ? "Your registration was cancelled with PAAIPE."
+                        : wasSynced
+                          ? "Your registration was cancelled with PAAIPE."
+                          : "This device pass was removed.",
+                    );
+                    setFlow("detail");
+                  },
+                  () => {
+                    setCancelling(false);
+                    setCancelNotice(
+                      "Couldn't reach PAAIPE to cancel — you're still registered. Try again when you're back online.",
+                    );
+                  },
+                );
               }}
             >
               <X />
               <span>
-                <strong>Cancel registration</strong>
-                <small>Remove this ticket from your device</small>
+                <strong>{cancelling ? "Cancelling…" : "Cancel registration"}</strong>
+                <small>
+                  {ticket.synced
+                    ? "Cancels your spot with PAAIPE"
+                    : "Removes this ticket from your device"}
+                </small>
               </span>
               <ChevronRight />
             </button>
           </div>
+          {cancelNotice ? <p role="status">{cancelNotice}</p> : null}
           <p className="feedback-note">
             {ticket.synced
               ? "Your registration is confirmed with PAAIPE. Present this QR code at check-in."
@@ -2370,26 +2587,15 @@ function EventsView({
             </section>
           ) : (
             <section className="register-cta">
+              {cancelNotice ? <p role="status">{cancelNotice}</p> : null}
               {needsVerification ? (
-                <>
-                  <span className="soft-chip warn">Verify your email</span>
-                  <strong>Confirm your email to register</strong>
-                  <p>
-                    PAAIPE sends your ticket and event updates to your verified email. Verify your
-                    address, then come back to register.
-                  </p>
-                  <button
-                    type="button"
-                    className="register-button"
-                    disabled={resending}
-                    onClick={handleResend}
-                  >
-                    {resending ? "Sending…" : "Resend verification email"}
-                  </button>
-                  {resendMsg || verificationNotice ? (
-                    <p className="feedback-note">{resendMsg || verificationNotice}</p>
-                  ) : null}
-                </>
+                <VerifyGate
+                  variant="card"
+                  title="Confirm your email to register"
+                  description="PAAIPE sends your ticket and event updates to your verified email. Verify your address, then come back to register."
+                  onResend={onResendVerification}
+                  notice={verificationNotice}
+                />
               ) : (
                 <>
                   <strong>Save your spot</strong>
@@ -2463,11 +2669,19 @@ function EventsView({
       </div>
       {pendingCount > 0 ? (
         <div className="sync-banner" role="status">
-          <RefreshCw />
+          <RefreshCw className={syncing ? "spin" : ""} />
           <span>
-            {pendingCount} registration{pendingCount === 1 ? "" : "s"} pending — will sync when
-            you're back online.
+            {pendingCount} registration{pendingCount === 1 ? "" : "s"} pending —{" "}
+            {syncMsg || "will sync when you're back online."}
           </span>
+          <button
+            type="button"
+            className="sync-now"
+            disabled={syncing}
+            onClick={handleSyncNow}
+          >
+            {syncing ? "Syncing…" : "Sync now"}
+          </button>
         </div>
       ) : null}
       <BannerSlot
@@ -3079,21 +3293,7 @@ function EditProfileView({
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [resendMsg, setResendMsg] = useState("");
   const photoRef = useRef<HTMLInputElement>(null);
-
-  const handleResend = () => {
-    setResending(true);
-    setResendMsg("");
-    void onResendVerification().then(
-      () => setResending(false),
-      () => {
-        setResending(false);
-        setResendMsg("Could not send the verification email just now. Please try again shortly.");
-      },
-    );
-  };
 
   const pickPhoto = (file: File | undefined) => {
     if (!file) return;
@@ -3145,21 +3345,12 @@ function EditProfileView({
         }}
       >
         {needsVerification ? (
-          <div className="sync-banner" role="status">
-            <Mail />
-            <span>
-              Verify your email to save profile changes to your account.{" "}
-              <button
-                type="button"
-                className="text-link"
-                disabled={resending}
-                onClick={handleResend}
-              >
-                {resending ? "Sending…" : "Resend verification email"}
-              </button>
-              {resendMsg || verificationNotice ? ` ${resendMsg || verificationNotice}` : ""}
-            </span>
-          </div>
+          <VerifyGate
+            variant="banner"
+            description="Verify your email to save profile changes to your account."
+            onResend={onResendVerification}
+            notice={verificationNotice}
+          />
         ) : null}
         <div className="photo-field">
           <div className="avatar profile-avatar photo-preview">
