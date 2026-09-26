@@ -750,6 +750,23 @@
   background: #fdf1dd;
   color: #7a4a06;
 }
+.portal-shell.teresa-inside .sync-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fdf1dd;
+  color: #7a4a06;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.portal-shell.teresa-inside .sync-banner svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
 .portal-shell.teresa-inside .program-detail {
   color: var(--sw-muted);
   font-size: 12px;

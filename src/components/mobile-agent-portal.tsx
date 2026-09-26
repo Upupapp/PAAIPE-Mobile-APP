@@ -27,6 +27,7 @@ import {
   Newspaper,
   Play,
   Presentation,
+  RefreshCw,
   Search,
   Share2,
   Star,
@@ -60,7 +61,11 @@ import {
   dequeueRegistration,
   flushRegistrationQueue,
   isRetriableRegistrationError,
+  fetchMyRegistrations,
+  cancelMyRegistration,
+  readRegistrationQueue,
 } from "../lib/registrations";
+import { recordRegistrationEvent } from "../lib/telemetry";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
 import { DataState, MembershipPanel, ProfileGate } from "./membership-panel";
 import { AppHaptics } from "../lib/app-haptics";
@@ -472,6 +477,70 @@ export function MobileAgentPortal() {
     };
   }, [signedIn]);
 
+  // Reconcile local tickets against the backend on launch so a member's
+  // registrations follow them across devices. We read the member's own rows
+  // (allowed for a verified owner by email), add a ticket for any active
+  // registration missing locally, and drop a local ticket the member cancelled
+  // elsewhere. Locally-pending (un-synced) tickets are left untouched.
+  useEffect(() => {
+    const email = user?.email ?? "";
+    if (!(signedIn && canSubmitRegistration() && user?.emailVerified && email)) return;
+    const backendEvents = eventData.data ?? [];
+    let active = true;
+    void (async () => {
+      const remote = await fetchMyRegistrations(email);
+      if (!active || !remote.length) return;
+      const byEvent = (id: string) => backendEvents.find((event) => event.id === id) ?? null;
+      setTickets((current) => {
+        let changed = false;
+        const next = { ...current };
+        for (const reg of remote) {
+          if (!reg.eventId) continue;
+          const existing = next[reg.eventId];
+          if (reg.cancelled) {
+            // Cancelled elsewhere — remove the matching on-device pass.
+            if (existing && existing.reference === reg.id) {
+              delete next[reg.eventId];
+              changed = true;
+            }
+            continue;
+          }
+          if (existing) {
+            if (!existing.synced || existing.pending) {
+              next[reg.eventId] = { ...existing, synced: true, pending: false, reference: reg.id };
+              changed = true;
+            }
+            continue;
+          }
+          const event = byEvent(reg.eventId);
+          next[reg.eventId] = {
+            eventId: reg.eventId,
+            eventTitle: event?.title || reg.event || "PAAIPE event",
+            eventDate: event?.date || "Date to be announced",
+            eventTime: event?.startTime
+              ? `${event.startTime}${event.endTime ? ` – ${event.endTime}` : ""}`
+              : "",
+            attendeeName: publicCard?.name?.trim() || user?.displayName || "Member",
+            attendeeEmail: email,
+            note: "",
+            code: ticketCode(reg.eventId),
+            reference: reg.id,
+            createdAt: new Date().toISOString(),
+            synced: true,
+            pending: false,
+          };
+          changed = true;
+        }
+        if (!changed) return current;
+        writeTickets(next);
+        return next;
+      });
+    })();
+    return () => {
+      active = false;
+    };
+  }, [signedIn, user?.email, user?.emailVerified, eventData.data]);
+
 
   const triggerArrive = () => {
     setArriveTick((n) => n + 1);
@@ -709,11 +778,14 @@ export function MobileAgentPortal() {
       try {
         reference = await submitEventRegistration(input, registrationId);
         synced = true;
+        recordRegistrationEvent("write_success");
       } catch (error) {
         if (isRetriableRegistrationError(error)) {
           enqueueRegistration({ ...input, registrationId, queuedAt: Date.now() });
           pending = true;
+          recordRegistrationEvent("write_queued");
         } else {
+          recordRegistrationEvent("write_failure");
           throw error;
         }
       }
@@ -761,13 +833,22 @@ export function MobileAgentPortal() {
     await sendVerification();
     await refreshProfile();
   };
-  const cancelRegistration = (eventId: string) => {
+  const cancelRegistration = async (eventId: string) => {
+    const ticket = ticketsRef.current[eventId];
+    // A synced registration cannot be deleted (rules forbid client deletes), so a
+    // member cancel is a server-side status:'cancelled' update on their own row.
+    // An un-synced pass is only in the resend queue — drop it so it never lands.
+    if (ticket?.synced) {
+      try {
+        await cancelMyRegistration(ticket.reference);
+        recordRegistrationEvent("cancel_success");
+      } catch {
+        recordRegistrationEvent("cancel_failure");
+      }
+    } else if (ticket && !ticket.synced) {
+      dequeueRegistration(ticket.reference);
+    }
     setTickets((current) => {
-      const ticket = current[eventId];
-      // If a member cancels before an offline write has synced, drop it from the
-      // resend queue so it never reaches the backend. A registration that already
-      // synced cannot be deleted (rules); cancelling only removes the local pass.
-      if (ticket && !ticket.synced) dequeueRegistration(ticket.reference);
       const next = { ...current };
       delete next[eventId];
       writeTickets(next);
@@ -783,6 +864,7 @@ export function MobileAgentPortal() {
     });
   };
   const unreadCount = notifications.filter((item) => !item.read).length;
+  const pendingRegistrations = Object.values(tickets).filter((ticket) => ticket.pending).length;
   const savePublicCard = async (next: PublicCard) => {
     const saved = { ...next, name: next.name.trim() };
     setPublicCard(saved);
@@ -903,6 +985,7 @@ export function MobileAgentPortal() {
               needsVerification={registrationNeedsVerification}
               onResendVerification={resendVerification}
               verificationNotice={verificationNotice}
+              pendingCount={pendingRegistrations}
             />
           )}
           {active === "Profile" && (
@@ -920,6 +1003,9 @@ export function MobileAgentPortal() {
               card={publicCard}
               onSave={savePublicCard}
               signedIn={Boolean(user)}
+              needsVerification={registrationNeedsVerification}
+              onResendVerification={resendVerification}
+              verificationNotice={verificationNotice}
             />
           )}
           {active === "PublicProfile" && (
@@ -2020,6 +2106,7 @@ function EventsView({
   needsVerification,
   onResendVerification,
   verificationNotice,
+  pendingCount,
 }: {
   events: ApiEvent[];
   loadState: Loadable<ApiEvent[]>;
@@ -2029,10 +2116,11 @@ function EventsView({
     event: ApiEvent,
     form: { name: string; email: string; note: string },
   ) => Promise<EventTicket>;
-  onCancel: (eventId: string) => void;
+  onCancel: (eventId: string) => void | Promise<void>;
   needsVerification: boolean;
   onResendVerification: () => Promise<void>;
   verificationNotice: string | null;
+  pendingCount: number;
 }) {
   const [period, setPeriod] = useState<"Upcoming" | "Past">("Upcoming");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -2373,6 +2461,15 @@ function EventsView({
           </button>
         ))}
       </div>
+      {pendingCount > 0 ? (
+        <div className="sync-banner" role="status">
+          <RefreshCw />
+          <span>
+            {pendingCount} registration{pendingCount === 1 ? "" : "s"} pending — will sync when
+            you're back online.
+          </span>
+        </div>
+      ) : null}
       <BannerSlot
         label="Events banner"
         src="/banners/events/events-banner@1x.png"
@@ -2960,11 +3057,17 @@ function EditProfileView({
   card,
   onSave,
   signedIn,
+  needsVerification,
+  onResendVerification,
+  verificationNotice,
 }: {
   identity: DisplayIdentity;
   card: PublicCard | null;
   onSave: (card: PublicCard) => Promise<void>;
   signedIn: boolean;
+  needsVerification: boolean;
+  onResendVerification: () => Promise<void>;
+  verificationNotice: string | null;
 }) {
   const [name, setName] = useState(card?.name || identity.displayName);
   const [headline, setHeadline] = useState(card?.headline || "");
@@ -2976,7 +3079,21 @@ function EditProfileView({
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
   const photoRef = useRef<HTMLInputElement>(null);
+
+  const handleResend = () => {
+    setResending(true);
+    setResendMsg("");
+    void onResendVerification().then(
+      () => setResending(false),
+      () => {
+        setResending(false);
+        setResendMsg("Could not send the verification email just now. Please try again shortly.");
+      },
+    );
+  };
 
   const pickPhoto = (file: File | undefined) => {
     if (!file) return;
@@ -2986,6 +3103,11 @@ function EditProfileView({
   };
 
   const submit = async () => {
+    if (needsVerification) {
+      setError("Verify your email before saving changes to your account.");
+      setSaved(false);
+      return;
+    }
     if (!name.trim()) {
       setError("Add the name members should see.");
       setSaved(false);
@@ -3022,6 +3144,23 @@ function EditProfileView({
           void submit();
         }}
       >
+        {needsVerification ? (
+          <div className="sync-banner" role="status">
+            <Mail />
+            <span>
+              Verify your email to save profile changes to your account.{" "}
+              <button
+                type="button"
+                className="text-link"
+                disabled={resending}
+                onClick={handleResend}
+              >
+                {resending ? "Sending…" : "Resend verification email"}
+              </button>
+              {resendMsg || verificationNotice ? ` ${resendMsg || verificationNotice}` : ""}
+            </span>
+          </div>
+        ) : null}
         <div className="photo-field">
           <div className="avatar profile-avatar photo-preview">
             {photo ? <img src={photo} alt="" /> : identity.initials}
@@ -3082,7 +3221,7 @@ function EditProfileView({
         </label>
         {error ? <p role="alert">{error}</p> : null}
         {saved ? <p role="status">Saved. Open the preview to see the public profile.</p> : null}
-        <button type="submit" disabled={saving}>
+        <button type="submit" disabled={saving || needsVerification}>
           {saving ? "Saving…" : "Save profile"}
         </button>
       </form>
