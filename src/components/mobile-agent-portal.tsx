@@ -494,6 +494,28 @@ export function MobileAgentPortal() {
     async (): Promise<string | null> => (user ? user.getIdToken() : null),
     [user],
   );
+  useEffect(() => {
+    if (!signedIn || !user) return;
+    let alive = true;
+    void readAgentPhotoUrl(user.uid).then((url) => {
+      if (!alive || !url) return;
+      setPublicCard((current) => {
+        if (current?.photo) return current;
+        return {
+          name: current?.name ?? "",
+          headline: current?.headline ?? "",
+          about: current?.about ?? "",
+          work: current?.work ?? "",
+          link: current?.link ?? "",
+          directoryVisible: current?.directoryVisible ?? false,
+          photo: url,
+        };
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signedIn, user]);
   const showPortal = signedIn || preview;
   const usePreviewData = preview && !signedIn;
   const portalIdentity = identity ?? (preview ? PREVIEW_IDENTITY : null);
