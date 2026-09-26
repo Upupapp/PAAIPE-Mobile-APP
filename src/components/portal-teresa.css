@@ -672,7 +672,27 @@
   gap: 4px;
   padding: 40px 16px 18px;
   color: #fff;
+  text-align: left;
+  border: 0;
+  width: 100%;
+  cursor: pointer;
   background: linear-gradient(180deg, transparent, rgba(4, 6, 12, 0.82));
+}
+.portal-shell.teresa-inside .reels-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  align-self: start;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 12px;
+  font-weight: 600;
+}
+.portal-shell.teresa-inside .reels-open svg {
+  width: 14px;
+  height: 14px;
 }
 .portal-shell.teresa-inside .reels-overlay strong {
   font-size: 17px;
@@ -1453,6 +1473,59 @@
 }
 .portal-shell.teresa-inside .session-watch svg {
   width: 18px;
+}
+.portal-shell.teresa-inside .inline-player {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #05060a;
+}
+.portal-shell.teresa-inside .inline-player.portrait {
+  aspect-ratio: 9 / 16;
+  width: min(100%, 340px);
+  margin-inline: auto;
+}
+.portal-shell.teresa-inside .inline-player iframe,
+.portal-shell.teresa-inside .inline-player video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+  background: #000;
+  display: block;
+}
+.portal-shell.teresa-inside .inline-player-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background-color: #05060a;
+  background-size: cover;
+  background-position: center;
+  display: grid;
+  place-items: center;
+}
+.portal-shell.teresa-inside .inline-player-badge {
+  width: 62px;
+  height: 62px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--sw-blue);
+  box-shadow: 0 10px 30px rgba(4, 6, 12, 0.45);
+}
+.portal-shell.teresa-inside .inline-player-badge svg {
+  width: 26px;
+  height: 26px;
+  margin-left: 3px;
 }
 /* Teresa's menu is a bottom sheet, with grouped navigation and a quiet identity. */
 .portal-shell.teresa-inside .drawer-layer {

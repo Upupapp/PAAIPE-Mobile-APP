@@ -45,7 +45,6 @@ import {
   X,
 } from "lucide-react";
 import logo from "../assets/paaipe-logo.png";
-import eventCover from "../assets/ai-exchange-cover.png";
 import QRCode from "qrcode";
 import "./portal-teresa.css";
 import { MobileOnboarding } from "./mobile-onboarding";
@@ -100,6 +99,8 @@ type Detail =
   | "Certificates"
   | "Programs"
   | "Session"
+  | "Micro"
+  | "Playlist"
   | "EditProfile"
   | "PublicProfile"
   | "MemberProfile"
@@ -147,6 +148,8 @@ const detailTitles: Record<Detail, string> = {
   Certificates: "My certificates",
   Programs: "Programs",
   Session: "Session",
+  Micro: "Micro",
+  Playlist: "Playlist",
   EditProfile: "Edit profile",
   PublicProfile: "Your public profile",
   MemberProfile: "Profile",
@@ -370,8 +373,12 @@ const PREVIEW_SESSIONS: ApiSession[] = [
   {
     id: "prev-s-signals",
     title: "From Signals to Strategy (sample)",
-    description: "Preview sample recording.",
+    description: "Preview sample recording. Plays a real published clip in-app.",
     speaker: "Sample Speaker",
+    source: "youtube",
+    youtubeId: "ePw_wlPqYUk",
+    posterUrl: "https://paaipe.org/assets/img/ai-exchange-session.jpg",
+    aspect: "16:9",
     published: true,
     displayOrder: 1,
   },
@@ -396,8 +403,10 @@ const PREVIEW_MICROS: ApiMicro[] = [
   {
     id: "prev-m-prompt",
     title: "Prompt in 30s (sample)",
-    description: "Preview sample micro. Real vertical micros play here when published.",
+    description: "Preview sample micro. Plays a real published clip in-app.",
     speaker: "Sample Speaker",
+    source: "upload",
+    storagePath: "https://media.paaipe.org/micros/micro-1.mp4",
     aspect: "9:16",
     posterUrl: "https://paaipe.org/assets/img/ai-exchange-session.jpg",
     published: true,
@@ -516,6 +525,8 @@ export function MobileAgentPortal() {
     }
   };
   const [selectedSession, setSelectedSession] = useState<ApiSession | null>(null);
+  const [selectedMicro, setSelectedMicro] = useState<ApiMicro | null>(null);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<ApiPlaylist | null>(null);
   const [selectedMember, setSelectedMember] = useState<DirectoryMember | null>(null);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>(FEED_SEED);
   const [tickets, setTickets] = useState<Record<string, EventTicket>>(() => readTickets());
@@ -821,6 +832,8 @@ export function MobileAgentPortal() {
     setActive("Home");
     setActiveBranch("Home");
     setSelectedSession(null);
+    setSelectedMicro(null);
+    setSelectedPlaylist(null);
     setDirectoryOffset(0);
     setMenuOpen(false);
     setNotificationsOpen(false);
@@ -828,7 +841,7 @@ export function MobileAgentPortal() {
 
   const isDetail = active in detailTitles;
   const classicDetailParent: View =
-    active === "Session"
+    active === "Session" || active === "Micro" || active === "Playlist"
       ? "Learn"
       : active === "MemberProfile"
         ? "Directory"
@@ -1066,6 +1079,14 @@ export function MobileAgentPortal() {
     setSelectedSession(session);
     select("Session");
   };
+  const openMicro = (micro: ApiMicro) => {
+    setSelectedMicro(micro);
+    select("Micro");
+  };
+  const openPlaylist = (playlist: ApiPlaylist) => {
+    setSelectedPlaylist(playlist);
+    select("Playlist");
+  };
 
   return (
     <div className="app-stage">
@@ -1163,6 +1184,8 @@ export function MobileAgentPortal() {
               lane={learnLane}
               onLane={setLearnLane}
               onOpen={openSession}
+              onOpenMicro={openMicro}
+              onOpenPlaylist={openPlaylist}
             />
           )}
           {active === "Events" && (
@@ -1273,6 +1296,18 @@ export function MobileAgentPortal() {
               session={selectedSession}
               onResources={() => openLearn("Resources")}
               onEvents={() => selectBranch("Events")}
+            />
+          )}
+          {active === "Micro" && (
+            <MicroView micro={selectedMicro} onMore={() => openLearn("Micros")} />
+          )}
+          {active === "Playlist" && (
+            <PlaylistView
+              playlist={selectedPlaylist}
+              sessions={sessions}
+              micros={micros}
+              onOpenSession={openSession}
+              onOpenMicro={openMicro}
             />
           )}
         </main>
@@ -1914,7 +1949,13 @@ const FEED_REELS: FeedReel[] = [
   },
 ];
 
-function MicrosReels({ micros }: { micros: ApiMicro[] }) {
+function MicrosReels({
+  micros,
+  onOpen,
+}: {
+  micros: ApiMicro[];
+  onOpen: (micro: ApiMicro) => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const root = containerRef.current;
@@ -1966,16 +2007,17 @@ function MicrosReels({ micros }: { micros: ApiMicro[] }) {
             ) : (
               <div
                 className="reels-poster"
-                style={
-                  micro.posterUrl ? { backgroundImage: `url(${micro.posterUrl})` } : undefined
-                }
+                style={micro.posterUrl ? { backgroundImage: `url(${micro.posterUrl})` } : undefined}
               />
             )}
-            <div className="reels-overlay">
+            <button type="button" className="reels-overlay" onClick={() => onOpen(micro)}>
               <strong>{micro.title || "Micro"}</strong>
               {micro.speaker ? <small>{micro.speaker}</small> : null}
               {micro.description ? <p>{micro.description}</p> : null}
-            </div>
+              <span className="reels-open">
+                <Play fill="currentColor" /> Play with sound
+              </span>
+            </button>
           </section>
         );
       })}
@@ -1993,6 +2035,8 @@ function LearnView({
   lane,
   onLane,
   onOpen,
+  onOpenMicro,
+  onOpenPlaylist,
 }: {
   sessions: ApiSession[];
   loadState: Loadable<ApiSession[]>;
@@ -2003,6 +2047,8 @@ function LearnView({
   lane: LearnLane;
   onLane: (lane: LearnLane) => void;
   onOpen: (session: ApiSession) => void;
+  onOpenMicro: (micro: ApiMicro) => void;
+  onOpenPlaylist: (playlist: ApiPlaylist) => void;
 }) {
   const [fileFormat, setFileFormat] =
     useState<(typeof FILE_FORMATS)[number]["label"]>("All formats");
@@ -2171,7 +2217,7 @@ function LearnView({
                 </div>
               );
             }
-            return <MicrosReels micros={shownMicros} />;
+            return <MicrosReels micros={shownMicros} onOpen={onOpenMicro} />;
           })()}
         </DataState>
       )}
@@ -2208,7 +2254,12 @@ function LearnView({
                       kind="Playlist"
                       title={item.title || "Playlist"}
                       description={item.description || `A playlist of ${kindLabel}.`}
-                      meta={count ? `${count} ${count === 1 ? kindLabel.slice(0, -1) : kindLabel}` : kindLabel}
+                      meta={
+                        count
+                          ? `${count} ${count === 1 ? kindLabel.slice(0, -1) : kindLabel}`
+                          : kindLabel
+                      }
+                      onClick={() => onOpenPlaylist(item)}
                     />
                   );
                 })}
@@ -4175,6 +4226,77 @@ function ProgramsView({ onEvents }: { onEvents: () => void }) {
   );
 }
 
+function playerMode(item: {
+  source?: string;
+  youtubeId?: string;
+  storagePath?: string;
+}): { mode: "embed"; src: string } | { mode: "file"; src: string } | null {
+  const embed = item.youtubeId
+    ? `https://www.youtube.com/embed/${item.youtubeId}?rel=0&playsinline=1&autoplay=1`
+    : null;
+  const file = item.storagePath || null;
+  const preferFile = item.source === "upload";
+  if (preferFile) {
+    if (file) return { mode: "file", src: file };
+    if (embed) return { mode: "embed", src: embed };
+  } else {
+    if (embed) return { mode: "embed", src: embed };
+    if (file) return { mode: "file", src: file };
+  }
+  return null;
+}
+
+/**
+ * In-app player. YouTube-sourced items embed inline (16:9 or 9:16); uploaded
+ * items play from their media URL with native controls. Nothing opens an
+ * external app. A poster with a play badge defers loading until the user taps.
+ */
+function InlinePlayer({ item, portrait }: { item: ApiSession; portrait?: boolean }) {
+  const [playing, setPlaying] = useState(false);
+  const player = playerMode(item);
+  const cls = portrait ? "inline-player portrait" : "inline-player";
+  if (!player) {
+    return <div className="empty-note">A recording is not available for this item yet.</div>;
+  }
+  if (!playing) {
+    return (
+      <div className={cls}>
+        <button
+          type="button"
+          className="inline-player-poster"
+          onClick={() => setPlaying(true)}
+          style={item.posterUrl ? { backgroundImage: `url(${item.posterUrl})` } : undefined}
+        >
+          <span className="inline-player-badge">
+            <Play fill="currentColor" />
+          </span>
+          <span className="sr-only">Play {item.title || "recording"}</span>
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className={cls}>
+      {player.mode === "embed" ? (
+        <iframe
+          src={player.src}
+          title={item.title || "Recording"}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      ) : (
+        <video
+          src={player.src}
+          {...(item.posterUrl ? { poster: item.posterUrl } : {})}
+          controls
+          autoPlay
+          playsInline
+        />
+      )}
+    </div>
+  );
+}
+
 function SessionView({
   session,
   onResources,
@@ -4184,11 +4306,7 @@ function SessionView({
   onResources: () => void;
   onEvents: () => void;
 }) {
-  const videoUrl =
-    session?.youtubeUrl ||
-    (session?.youtubeId
-      ? `https://www.youtube.com/watch?v=${encodeURIComponent(session.youtubeId)}`
-      : null);
+  const hasMedia = session ? playerMode(session) !== null : false;
   return (
     <div className="screen-stack animate-fade-in page-screen session-screen">
       <PageTitle
@@ -4196,20 +4314,12 @@ function SessionView({
         title={session?.title || "Session"}
         subtitle={session?.description || "Members-only recording."}
       />
-      <div className="session-player">
-        <img src={session?.posterUrl || eventCover} alt="" />
-        {videoUrl ? (
-          <button
-            className="session-watch"
-            type="button"
-            onClick={() => void openExternalUrl(videoUrl)}
-          >
-            <Play fill="currentColor" />
-            Watch
-          </button>
-        ) : null}
-      </div>
-      {!videoUrl && (
+      {session ? (
+        <InlinePlayer item={session} />
+      ) : (
+        <div className="empty-note">This session could not be opened.</div>
+      )}
+      {session && !hasMedia && (
         <div className="empty-note">A recording is not available for this session yet.</div>
       )}
       <h2 className="subheading">Speaker</h2>
@@ -4261,6 +4371,121 @@ function SessionView({
       <div className="empty-note">
         Report a playback problem from the association if the recording will not play.
       </div>
+    </div>
+  );
+}
+
+function MicroView({ micro, onMore }: { micro: ApiMicro | null; onMore: () => void }) {
+  const hasMedia = micro ? playerMode(micro) !== null : false;
+  return (
+    <div className="screen-stack animate-fade-in page-screen session-screen">
+      <PageTitle
+        kicker="Learnings · Micros"
+        title={micro?.title || "Micro"}
+        subtitle={micro?.description || "A short vertical lesson."}
+      />
+      {micro ? (
+        <InlinePlayer item={micro} portrait />
+      ) : (
+        <div className="empty-note">This micro could not be opened.</div>
+      )}
+      {micro && !hasMedia && <div className="empty-note">This micro has no video yet.</div>}
+      {micro?.speaker ? (
+        <>
+          <h2 className="subheading">Speaker</h2>
+          <article className="program-card speaker-card">
+            <div className="avatar speaker-avatar">
+              {micro.speakerPhotoUrl ? (
+                <img src={micro.speakerPhotoUrl} alt={micro.speaker} />
+              ) : (
+                initialsFromName(micro.speaker)
+              )}
+            </div>
+            <div>
+              <strong>{micro.speaker}</strong>
+              <p>Speaker for this micro.</p>
+            </div>
+          </article>
+        </>
+      ) : null}
+      <div className="settings-list">
+        <button type="button" onClick={onMore}>
+          <Play />
+          <span>
+            <strong>More micros</strong>
+            <small>Back to the vertical feed</small>
+          </span>
+          <ChevronRight />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PlaylistView({
+  playlist,
+  sessions,
+  micros,
+  onOpenSession,
+  onOpenMicro,
+}: {
+  playlist: ApiPlaylist | null;
+  sessions: ApiSession[];
+  micros: ApiMicro[];
+  onOpenSession: (session: ApiSession) => void;
+  onOpenMicro: (micro: ApiMicro) => void;
+}) {
+  if (!playlist) {
+    return (
+      <div className="screen-stack animate-fade-in page-screen">
+        <div className="empty-note">This playlist could not be opened.</div>
+      </div>
+    );
+  }
+  const isMicros = playlist.kind === "micros";
+  const pool = isMicros ? micros : sessions;
+  const byId = new Map(pool.map((item) => [item.id, item]));
+  const ids = playlist.itemIds ?? [];
+  // Preserve the curated order; skip ids we don't have loaded rather than faking them.
+  const resolved = ids
+    .map((id) => byId.get(id))
+    .filter((item): item is ApiSession => Boolean(item));
+  const missing = ids.length - resolved.length;
+  const kindLabel = isMicros ? "micros" : "sessions";
+  return (
+    <div className="screen-stack animate-fade-in page-screen">
+      <PageTitle
+        kicker="Learnings · Playlist"
+        title={playlist.title || "Playlist"}
+        subtitle={playlist.description || `A playlist of ${kindLabel}.`}
+      />
+      {resolved.length === 0 ? (
+        <div className="empty-note">
+          {ids.length === 0
+            ? "This playlist has no items yet."
+            : `The ${kindLabel} in this playlist are not available right now.`}
+        </div>
+      ) : (
+        <div className="visual-grid">
+          {resolved.map((item, index) => (
+            <VisualCard
+              key={item.id}
+              kind={isMicros ? "Micro" : "Session"}
+              title={`${index + 1}. ${item.title || (isMicros ? "Micro" : "Session")}`}
+              description={item.description || (isMicros ? "Short vertical lesson" : "Recording")}
+              meta={isMicros ? "Vertical micro" : "Horizontal recording"}
+              {...(item.posterUrl ? { image: item.posterUrl } : {})}
+              onClick={() => (isMicros ? onOpenMicro(item) : onOpenSession(item))}
+            />
+          ))}
+        </div>
+      )}
+      {missing > 0 && resolved.length > 0 ? (
+        <div className="empty-note">
+          {missing} more {missing === 1 ? "item is" : "items are"} in this playlist but not loaded
+          here.
+        </div>
+      ) : null}
     </div>
   );
 }
