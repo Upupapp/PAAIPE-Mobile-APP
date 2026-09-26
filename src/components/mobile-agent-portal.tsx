@@ -3043,6 +3043,35 @@ function EventsView({
             </section>
           )
         ) : null}
+        {selected.speakers && selected.speakers.length > 0 ? (
+          <>
+            <h2 className="subheading">{selected.speakers.length > 1 ? "Speakers" : "Speaker"}</h2>
+            <div className="program-list">
+              {selected.speakers.map((speaker, index) => (
+                <article
+                  className="program-card speaker-card"
+                  key={`${speaker.name || "speaker"}-${index}`}
+                >
+                  <div className="avatar speaker-avatar">
+                    {speaker.photoUrl ? (
+                      <img src={speaker.photoUrl} alt={speaker.name || "Speaker"} />
+                    ) : speaker.name ? (
+                      initialsFromName(speaker.name)
+                    ) : (
+                      <UserRound aria-hidden="true" />
+                    )}
+                  </div>
+                  <div>
+                    <strong>{speaker.name || "Speaker"}</strong>
+                    {speaker.title || speaker.role ? (
+                      <p>{[speaker.title, speaker.role].filter(Boolean).join(" · ")}</p>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : null}
         <h2 className="subheading">{held ? "After the session" : "What to expect"}</h2>
         <div className="program-list">
           {(held

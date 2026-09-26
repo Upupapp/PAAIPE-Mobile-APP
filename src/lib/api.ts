@@ -198,6 +198,13 @@ export type ApiEvent = {
   description?: string;
   format?: string;
   coverUrl?: string;
+  speakers?: ApiEventSpeaker[];
+};
+export type ApiEventSpeaker = {
+  name?: string;
+  title?: string;
+  role?: string;
+  photoUrl?: string;
 };
 export type ApiSession = {
   id: string;
@@ -257,7 +264,17 @@ export async function getEvents(): Promise<ApiEvent[]> {
   const events = parseList<ApiEvent>(await apiRequest({ path: "/v1/events" }), "events");
   return events.map((event) => {
     const cover = resolveAssetUrl(event.coverUrl);
-    return cover ? { ...event, coverUrl: cover } : event;
+    const speakers = Array.isArray(event.speakers)
+      ? event.speakers.map((speaker) => {
+          const photo = resolveAssetUrl(speaker.photoUrl);
+          return photo ? { ...speaker, photoUrl: photo } : speaker;
+        })
+      : undefined;
+    return {
+      ...event,
+      ...(cover ? { coverUrl: cover } : {}),
+      ...(speakers ? { speakers } : {}),
+    };
   });
 }
 export async function getSessions(): Promise<ApiSession[]> {
