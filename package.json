@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
     "cap:sync": "bun run build && bunx cap sync",
     "cap:ios": "bunx cap open ios",
     "cap:android": "bunx cap open android",
