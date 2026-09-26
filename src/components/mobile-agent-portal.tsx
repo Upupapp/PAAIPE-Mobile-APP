@@ -52,7 +52,15 @@ import {
 import { tryPatchProfile } from "../lib/auth-context";
 import { type DisplayIdentity } from "../lib/profile-display";
 import { openExternalUrl } from "../lib/legal-links";
-import { canSubmitRegistration, submitEventRegistration } from "../lib/registrations";
+import {
+  canSubmitRegistration,
+  submitEventRegistration,
+  newRegistrationId,
+  enqueueRegistration,
+  dequeueRegistration,
+  flushRegistrationQueue,
+  isRetriableRegistrationError,
+} from "../lib/registrations";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
 import { DataState, MembershipPanel, ProfileGate } from "./membership-panel";
 import { AppHaptics } from "../lib/app-haptics";
@@ -184,6 +192,8 @@ export type EventTicket = {
   reference: string;
   createdAt: string;
   synced: boolean;
+  /** A signed-in member's write that failed to send and is queued to resend. */
+  pending?: boolean;
 };
 
 export type AppNotification = {
@@ -336,7 +346,7 @@ function readyLoadable<T>(data: T): Loadable<T> {
 }
 
 export function MobileAgentPortal() {
-  const { ready, user, identity, profileState, profileSyncPending, signOut, refreshProfile } = useAuth();
+  const { ready, user, identity, profileState, profileSyncPending, signOut, refreshProfile, sendVerification, verificationNotice } = useAuth();
   const [publicCard, setPublicCard] = useState<PublicCard | null>(() => readPublicCard());
   const [preview, setPreview] = useState(false);
   const [directoryOffset, setDirectoryOffset] = useState(0);
@@ -405,6 +415,63 @@ export function MobileAgentPortal() {
   const phoneRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const centerAnimTimer = useRef<number[]>([]);
+  const ticketsRef = useRef(tickets);
+  ticketsRef.current = tickets;
+
+  // Resend any registration whose backend write failed on a flaky network. Runs
+  // on mount and whenever the device comes back online or the app resumes. The
+  // write reuses the original client-minted id, so a resend cannot duplicate it.
+  useEffect(() => {
+    if (!(signedIn && canSubmitRegistration())) return;
+    let active = true;
+    const run = async () => {
+      const settled = await flushRegistrationQueue();
+      if (!active || !settled.length) return;
+      const currentTickets = ticketsRef.current;
+      const confirmed: Array<{ eventId: string; title: string }> = [];
+      for (const { registrationId, eventId } of settled) {
+        const ticket = currentTickets[eventId];
+        if (ticket && ticket.reference === registrationId && !ticket.synced)
+          confirmed.push({ eventId, title: ticket.eventTitle });
+      }
+      if (!confirmed.length) return;
+      setTickets((current) => {
+        const next = { ...current };
+        for (const { eventId } of confirmed) {
+          const ticket = next[eventId];
+          if (ticket) next[eventId] = { ...ticket, synced: true, pending: false };
+        }
+        writeTickets(next);
+        return next;
+      });
+      setNotifications((current) => {
+        const existing = new Set(current.map((item) => item.id));
+        const fresh = confirmed
+          .map(({ eventId, title }) => ({
+            id: `n-sync-${eventId}`,
+            title: "Registration synced",
+            body: `Your spot for ${title} is now confirmed with PAAIPE.`,
+            at: Date.now(),
+            read: false,
+          }))
+          .filter((item) => !existing.has(item.id));
+        if (!fresh.length) return current;
+        const next = [...fresh, ...current];
+        writeNotifications(next);
+        return next;
+      });
+    };
+    void run();
+    const onWake = () => void run();
+    window.addEventListener("online", onWake);
+    window.addEventListener("paaipe:resume", onWake);
+    return () => {
+      active = false;
+      window.removeEventListener("online", onWake);
+      window.removeEventListener("paaipe:resume", onWake);
+    };
+  }, [signedIn]);
+
 
   const triggerArrive = () => {
     setArriveTick((n) => n + 1);
@@ -609,6 +676,11 @@ export function MobileAgentPortal() {
     initials,
   };
   const photo = publicCard?.photo ?? "";
+  const emailVerified = Boolean(user?.emailVerified);
+  const memberCanWrite = signedIn && canSubmitRegistration();
+  // The association requires a verified email before a member's registration is
+  // sent to the backend. Guests/preview are unaffected (they get a local pass).
+  const registrationNeedsVerification = memberCanWrite && !emailVerified;
   const registerForEvent = async (
     event: ApiEvent,
     form: { name: string; email: string; note: string },
@@ -617,19 +689,34 @@ export function MobileAgentPortal() {
     const attendeeEmail = form.email.trim();
     let reference = `REG-${Date.now().toString(36).toUpperCase()}`;
     let synced = false;
-    // A real signed-in member's registration is written to the backend and keyed
-    // on the returned id. If that write fails we surface the error rather than
-    // minting a fake ticket. Preview/guest sessions keep an on-device pass.
-    if (signedIn && canSubmitRegistration()) {
-      reference = await submitEventRegistration({
+    let pending = false;
+    // A verified signed-in member's registration is written to the backend under
+    // a client-minted id so retries can never duplicate it. If the write fails on
+    // a flaky network we keep an on-device pass and queue it to resend; a real
+    // rejection (permission/validation) is surfaced instead of a fake ticket.
+    // Preview/guest sessions always keep a purely on-device pass.
+    if (memberCanWrite && emailVerified) {
+      const registrationId = newRegistrationId();
+      reference = registrationId;
+      const input = {
         eventId: event.id,
         event: event.title || "PAAIPE event",
         full_name: attendeeName,
         email: attendeeEmail,
         speaker_question: form.note,
         updates: false,
-      });
-      synced = true;
+      };
+      try {
+        reference = await submitEventRegistration(input, registrationId);
+        synced = true;
+      } catch (error) {
+        if (isRetriableRegistrationError(error)) {
+          enqueueRegistration({ ...input, registrationId, queuedAt: Date.now() });
+          pending = true;
+        } else {
+          throw error;
+        }
+      }
     }
     const ticket: EventTicket = {
       eventId: event.id,
@@ -645,6 +732,7 @@ export function MobileAgentPortal() {
       reference,
       createdAt: new Date().toISOString(),
       synced,
+      pending,
     };
     setTickets((current) => {
       const next = { ...current, [event.id]: ticket };
@@ -656,7 +744,9 @@ export function MobileAgentPortal() {
       title: "You're registered",
       body: synced
         ? `Your spot for ${ticket.eventTitle} is confirmed with PAAIPE. Open Events to view your ticket and QR code.`
-        : `Your spot for ${ticket.eventTitle} is saved on this device. Open Events to view your ticket and QR code.`,
+        : pending
+          ? `Your spot for ${ticket.eventTitle} is saved and will sync to PAAIPE automatically once you're back online.`
+          : `Your spot for ${ticket.eventTitle} is saved on this device. Open Events to view your ticket and QR code.`,
       at: Date.now(),
       read: false,
     };
@@ -667,8 +757,17 @@ export function MobileAgentPortal() {
     });
     return ticket;
   };
+  const resendVerification = async () => {
+    await sendVerification();
+    await refreshProfile();
+  };
   const cancelRegistration = (eventId: string) => {
     setTickets((current) => {
+      const ticket = current[eventId];
+      // If a member cancels before an offline write has synced, drop it from the
+      // resend queue so it never reaches the backend. A registration that already
+      // synced cannot be deleted (rules); cancelling only removes the local pass.
+      if (ticket && !ticket.synced) dequeueRegistration(ticket.reference);
       const next = { ...current };
       delete next[eventId];
       writeTickets(next);
@@ -801,6 +900,9 @@ export function MobileAgentPortal() {
               tickets={tickets}
               onRegister={registerForEvent}
               onCancel={cancelRegistration}
+              needsVerification={registrationNeedsVerification}
+              onResendVerification={resendVerification}
+              verificationNotice={verificationNotice}
             />
           )}
           {active === "Profile" && (
@@ -1915,6 +2017,9 @@ function EventsView({
   tickets,
   onRegister,
   onCancel,
+  needsVerification,
+  onResendVerification,
+  verificationNotice,
 }: {
   events: ApiEvent[];
   loadState: Loadable<ApiEvent[]>;
@@ -1925,6 +2030,9 @@ function EventsView({
     form: { name: string; email: string; note: string },
   ) => Promise<EventTicket>;
   onCancel: (eventId: string) => void;
+  needsVerification: boolean;
+  onResendVerification: () => Promise<void>;
+  verificationNotice: string | null;
 }) {
   const [period, setPeriod] = useState<"Upcoming" | "Past">("Upcoming");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1935,6 +2043,19 @@ function EventsView({
   const [submitting, setSubmitting] = useState(false);
   const [regError, setRegError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
+  const handleResend = () => {
+    setResending(true);
+    setResendMsg("");
+    void onResendVerification().then(
+      () => setResending(false),
+      () => {
+        setResending(false);
+        setResendMsg("Could not send the verification email just now. Please try again shortly.");
+      },
+    );
+  };
   const list = events.filter((event) =>
     period === "Past" ? event.status === "held" : event.status !== "held",
   );
@@ -2058,7 +2179,9 @@ function EventsView({
           <section className="ticket-card">
             <div className="ticket-head">
               <img src={logo} alt="PAAIPE" />
-              <span className="soft-chip ok">Registered</span>
+              <span className={`soft-chip ${ticket.synced ? "ok" : ticket.pending ? "warn" : "ok"}`}>
+                {ticket.synced ? "Registered" : ticket.pending ? "Syncing…" : "Registered"}
+              </span>
             </div>
             <h2>{ticket.eventTitle}</h2>
             <div className="ticket-meta">
@@ -2116,7 +2239,9 @@ function EventsView({
           <p className="feedback-note">
             {ticket.synced
               ? "Your registration is confirmed with PAAIPE. Present this QR code at check-in."
-              : "This is a preview pass generated on your device. Real check-in and the association's registration system are not connected in this build."}
+              : ticket.pending
+                ? "Saved on this device. Your registration will sync to PAAIPE automatically once you're back online."
+                : "This is a preview pass generated on your device. Real check-in and the association's registration system are not connected in this build."}
           </p>
         </div>
       );
@@ -2157,11 +2282,37 @@ function EventsView({
             </section>
           ) : (
             <section className="register-cta">
-              <strong>Save your spot</strong>
-              <p>Register to get a ticket with a QR code and a confirmation in notifications.</p>
-              <button type="button" className="register-button" onClick={startRegister}>
-                Register
-              </button>
+              {needsVerification ? (
+                <>
+                  <span className="soft-chip warn">Verify your email</span>
+                  <strong>Confirm your email to register</strong>
+                  <p>
+                    PAAIPE sends your ticket and event updates to your verified email. Verify your
+                    address, then come back to register.
+                  </p>
+                  <button
+                    type="button"
+                    className="register-button"
+                    disabled={resending}
+                    onClick={handleResend}
+                  >
+                    {resending ? "Sending…" : "Resend verification email"}
+                  </button>
+                  {resendMsg || verificationNotice ? (
+                    <p className="feedback-note">{resendMsg || verificationNotice}</p>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <strong>Save your spot</strong>
+                  <p>
+                    Register to get a ticket with a QR code and a confirmation in notifications.
+                  </p>
+                  <button type="button" className="register-button" onClick={startRegister}>
+                    Register
+                  </button>
+                </>
+              )}
             </section>
           )
         ) : null}

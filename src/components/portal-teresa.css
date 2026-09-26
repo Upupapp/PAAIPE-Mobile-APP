@@ -746,6 +746,10 @@
   background: #e3f6ec;
   color: #0a5c3a;
 }
+.portal-shell.teresa-inside .soft-chip.warn {
+  background: #fdf1dd;
+  color: #7a4a06;
+}
 .portal-shell.teresa-inside .program-detail {
   color: var(--sw-muted);
   font-size: 12px;
