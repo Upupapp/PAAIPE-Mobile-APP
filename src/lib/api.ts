@@ -473,9 +473,9 @@ export async function getMyEventFeedbackResponse(
     token,
   });
   if (status !== 200 || !data) return null;
-  const row = (data["response"] && typeof data["response"] === "object"
-    ? data["response"]
-    : data) as Record<string, unknown>;
+  const row = (
+    data["response"] && typeof data["response"] === "object" ? data["response"] : data
+  ) as Record<string, unknown>;
   const answers =
     row["answers"] && typeof row["answers"] === "object" && !Array.isArray(row["answers"])
       ? (row["answers"] as Record<string, string | number>)
@@ -496,7 +496,8 @@ export async function submitEventFeedbackResponse(
   input: { registrationId: string; answers: Record<string, string | number> },
 ): Promise<void> {
   const registrationId = String(input.registrationId || "").trim();
-  if (!registrationId) throw new ApiRequestError(400, "A registration is required to send feedback.");
+  if (!registrationId)
+    throw new ApiRequestError(400, "A registration is required to send feedback.");
   await apiRequest({
     method: "POST",
     path: `/v1/events/${encodeURIComponent(eventId)}/feedback/responses`,
@@ -527,12 +528,15 @@ function normalizeCertificateCard(raw: unknown): MeCertificate | null {
   const id = value["id"] == null ? "" : String(value["id"]);
   const pdfUrl = resolveMediaUrl(text(value["pdfUrl"])) || "";
   const pngUrl = resolveMediaUrl(text(value["pngUrl"])) || "";
-  const eventDate = value["eventDate"] == null || value["eventDate"] === "" ? null : String(value["eventDate"]);
-  const issuedAt = value["issuedAt"] == null || value["issuedAt"] === "" ? null : String(value["issuedAt"]);
+  const eventDate =
+    value["eventDate"] == null || value["eventDate"] === "" ? null : String(value["eventDate"]);
+  const issuedAt =
+    value["issuedAt"] == null || value["issuedAt"] === "" ? null : String(value["issuedAt"]);
   if (!eventTitle && !id && !eventDate && !issuedAt && !pdfUrl && !pngUrl) return null;
-  const series = value["series"] == null || String(value["series"]).trim() === ""
-    ? null
-    : String(value["series"]).trim();
+  const series =
+    value["series"] == null || String(value["series"]).trim() === ""
+      ? null
+      : String(value["series"]).trim();
   return {
     id,
     eventId: value["eventId"] == null ? "" : String(value["eventId"]),
@@ -543,7 +547,8 @@ function normalizeCertificateCard(raw: unknown): MeCertificate | null {
     pdfUrl,
     pngUrl,
     issuedAt,
-    emailedAt: value["emailedAt"] == null || value["emailedAt"] === "" ? null : String(value["emailedAt"]),
+    emailedAt:
+      value["emailedAt"] == null || value["emailedAt"] === "" ? null : String(value["emailedAt"]),
   };
 }
 /**
@@ -600,7 +605,9 @@ export function normalizeEventCertificate(raw: unknown): EventCertificate | null
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const value = raw as Record<string, unknown>;
   const rawCert =
-    value["certificate"] && typeof value["certificate"] === "object" && !Array.isArray(value["certificate"])
+    value["certificate"] &&
+    typeof value["certificate"] === "object" &&
+    !Array.isArray(value["certificate"])
       ? (value["certificate"] as Record<string, unknown>)
       : null;
   let state = String(value["state"] ?? "").trim();

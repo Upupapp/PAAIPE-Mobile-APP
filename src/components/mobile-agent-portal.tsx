@@ -1254,6 +1254,8 @@ export function MobileAgentPortal() {
               needsVerification={registrationNeedsVerification}
               onResendVerification={resendVerification}
               verificationNotice={verificationNotice}
+              getToken={getToken}
+              uid={user?.uid ?? null}
             />
           )}
           {active === "PublicProfile" && (
@@ -2674,11 +2676,7 @@ function EventSponsors({ eventId }: { eventId: string }) {
           return (
             <article className="program-card speaker-card" key={sponsor.id}>
               <div className="avatar speaker-avatar sponsor-logo">
-                {org?.logoUrl ? (
-                  <img src={org.logoUrl} alt={name} />
-                ) : (
-                  initialsFromName(name)
-                )}
+                {org?.logoUrl ? <img src={org.logoUrl} alt={name} /> : initialsFromName(name)}
               </div>
               <div>
                 <strong>{name}</strong>
@@ -4132,6 +4130,8 @@ function EditProfileView({
   needsVerification,
   onResendVerification,
   verificationNotice,
+  getToken,
+  uid,
 }: {
   identity: DisplayIdentity;
   card: PublicCard | null;
@@ -4140,6 +4140,8 @@ function EditProfileView({
   needsVerification: boolean;
   onResendVerification: () => Promise<void>;
   verificationNotice: string | null;
+  getToken: () => Promise<string | null>;
+  uid: string | null;
 }) {
   const [name, setName] = useState(card?.name || identity.displayName);
   const [headline, setHeadline] = useState(card?.headline || "");
@@ -4151,13 +4153,66 @@ function EditProfileView({
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState("");
   const photoRef = useRef<HTMLInputElement>(null);
 
-  const pickPhoto = (file: File | undefined) => {
+  useEffect(() => {
+    if (!signedIn || !uid || photo) return;
+    let alive = true;
+    void readAgentPhotoUrl(uid).then((url) => {
+      if (alive && url) setPhoto(url);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signedIn, uid, photo]);
+
+  const pickPhoto = async (file: File | undefined) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPhoto(typeof reader.result === "string" ? reader.result : "");
-    reader.readAsDataURL(file);
+    setPhotoError("");
+    const why = rejectPhotoFile(file);
+    if (why) {
+      setPhotoError(why);
+      return;
+    }
+    if (!signedIn || !uid) {
+      // No account to persist to — keep a local preview only.
+      const reader = new FileReader();
+      reader.onload = () => setPhoto(typeof reader.result === "string" ? reader.result : "");
+      reader.readAsDataURL(file);
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Sign in to upload a photo.");
+      const url = await uploadProfilePhoto(file, token);
+      await persistAgentPhotoUrl(uid, url);
+      setPhoto(url);
+    } catch (uploadError) {
+      setPhotoError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "The photo could not be uploaded. Nothing was saved.",
+      );
+    } finally {
+      setPhotoBusy(false);
+      if (photoRef.current) photoRef.current.value = "";
+    }
+  };
+
+  const clearPhoto = async () => {
+    setPhotoError("");
+    setPhoto("");
+    if (photoRef.current) photoRef.current.value = "";
+    if (signedIn && uid) {
+      try {
+        await persistAgentPhotoUrl(uid, "");
+      } catch {
+        setPhotoError("The photo could not be removed from your account. Please retry.");
+      }
+    }
   };
 
   const submit = async () => {
@@ -4193,7 +4248,7 @@ function EditProfileView({
         title="Edit profile"
         subtitle={
           signedIn
-            ? "Name and directory visibility save to your account. About, work, and the link stay on this device."
+            ? "Name, photo, and directory visibility save to your account. About, work, and the link stay on this device."
             : "This preview keeps your edits on this device."
         }
       />
@@ -4222,30 +4277,29 @@ function EditProfileView({
               type="file"
               accept="image/*"
               hidden
-              onChange={(event) => pickPhoto(event.target.files?.[0])}
+              onChange={(event) => void pickPhoto(event.target.files?.[0])}
             />
             <button
               type="button"
               className="composer-media"
+              disabled={photoBusy}
               onClick={() => photoRef.current?.click()}
             >
               <ImagePlus />
-              {photo ? "Change photo" : "Upload photo"}
+              {photoBusy ? "Uploading…" : photo ? "Change photo" : "Upload photo"}
             </button>
             {photo ? (
-              <button
-                type="button"
-                className="photo-clear"
-                onClick={() => {
-                  setPhoto("");
-                  if (photoRef.current) photoRef.current.value = "";
-                }}
-              >
+              <button type="button" className="photo-clear" onClick={() => void clearPhoto()}>
                 Remove
               </button>
             ) : null}
           </div>
         </div>
+        {photoError ? (
+          <p role="alert" className="feedback-note">
+            {photoError}
+          </p>
+        ) : null}
         <label>
           Name
           <input value={name} onChange={(event) => setName(event.target.value)} />
@@ -4487,7 +4541,9 @@ function OrganizationView({
   const [applyOrgId, setApplyOrgId] = useState("");
   const [applyReceipt, setApplyReceipt] = useState("");
 
-  const upcoming = events.filter((event) => event.status !== "held" && event.status !== "cancelled");
+  const upcoming = events.filter(
+    (event) => event.status !== "held" && event.status !== "cancelled",
+  );
 
   const load = useCallback(async () => {
     if (!signedIn) {
@@ -4713,7 +4769,11 @@ function OrganizationView({
               <div>
                 <strong>{org.name}</strong>
                 {org.website ? <p>{org.website}</p> : null}
-                {org.status ? <span className={`soft-chip ${org.status === "active" ? "ok" : ""}`}>{org.status}</span> : null}
+                {org.status ? (
+                  <span className={`soft-chip ${org.status === "active" ? "ok" : ""}`}>
+                    {org.status}
+                  </span>
+                ) : null}
               </div>
               <button type="button" className="text-link" onClick={() => startEdit(org)}>
                 Edit
@@ -4918,14 +4978,15 @@ function ProgramsView({ events, onEvents }: { events: ApiEvent[]; onEvents: () =
       <div className="program-list">
         {PORTAL_PROGRAMS.map((program) => {
           const isExchange = program.name === "AI Exchange";
-          const copy = isExchange && nextExchange
-            ? [
-                nextExchange.title,
-                [nextExchange.date, nextExchange.startTime].filter(Boolean).join(" · "),
-              ]
-                .filter(Boolean)
-                .join(" — ") || program.copy
-            : program.copy;
+          const copy =
+            isExchange && nextExchange
+              ? [
+                  nextExchange.title,
+                  [nextExchange.date, nextExchange.startTime].filter(Boolean).join(" · "),
+                ]
+                  .filter(Boolean)
+                  .join(" — ") || program.copy
+              : program.copy;
           const status = isExchange
             ? nextExchange
               ? "Next Exchange scheduled"
