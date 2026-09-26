@@ -54,7 +54,6 @@ import {
   getSessions,
   getMicros,
   getPlaylists,
-  getDirectory,
   initialsFromName,
   getEventSponsors,
   getEventFeedbackWindow,
@@ -88,6 +87,7 @@ import {
   readAgentPhotoUrl,
   rejectPhotoFile,
 } from "../lib/media";
+import { getDirectoryFromFirestore } from "../lib/directory";
 import { tryPatchProfile } from "../lib/auth-context";
 import { type DisplayIdentity } from "../lib/profile-display";
 import { openExternalUrl } from "../lib/legal-links";
@@ -534,9 +534,8 @@ export function MobileAgentPortal() {
   const sessionData = usePreviewData ? readyLoadable(PREVIEW_SESSIONS) : liveSessionData;
   const microData = usePreviewData ? readyLoadable(PREVIEW_MICROS) : liveMicroData;
   const playlistData = usePreviewData ? readyLoadable(PREVIEW_PLAYLISTS) : livePlaylistData;
-  const directoryData = useLoadable(
-    accountKey ? `${accountKey}:${directoryOffset}` : null,
-    async () => getDirectory(await user!.getIdToken(), directoryOffset),
+  const directoryData = useLoadable(accountKey ? `${accountKey}:${directoryOffset}` : null, () =>
+    getDirectoryFromFirestore(directoryOffset),
   );
   const events = eventData.data ?? [];
   const sessions = sessionData.data ?? [];
