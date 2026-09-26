@@ -19,9 +19,15 @@ import {
   collection,
   doc,
   setDoc,
+  updateDoc,
+  getDocs,
+  query,
+  where,
   serverTimestamp,
+  type Firestore,
 } from "firebase/firestore";
 import { getFirebaseApp, isFirebaseConfigured, DOC_VERSIONS } from "./firebase";
+import { recordRegistrationEvent } from "./telemetry";
 
 const DATABASE_ID = "paaipe";
 const REGISTRATIONS = "paaipe_event_registrations";
@@ -47,17 +53,25 @@ export function canSubmitRegistration(): boolean {
   return isFirebaseConfigured();
 }
 
+function db(): Firestore {
+  return getFirestore(getFirebaseApp(), DATABASE_ID);
+}
+
+/** Normalize an email the same way the backend rule compares it (lower-cased). */
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 /** A client-minted document id (also the registration id / ticket reference). */
 export function newRegistrationId(): string {
-  const db = getFirestore(getFirebaseApp(), DATABASE_ID);
-  return doc(collection(db, REGISTRATIONS)).id;
+  return doc(collection(db(), REGISTRATIONS)).id;
 }
 
 function buildPayload(input: RegistrationInput): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     event: input.event.trim().slice(0, 120),
     full_name: input.full_name.trim().slice(0, 120),
-    email: input.email.trim().slice(0, 254),
+    email: normalizeEmail(input.email).slice(0, 254),
     consent: true,
     eventId: input.eventId.slice(0, 120),
     source: "paaipe-mobile",
@@ -92,10 +106,63 @@ export async function submitEventRegistration(
   input: RegistrationInput,
   registrationId: string,
 ): Promise<string> {
-  const db = getFirestore(getFirebaseApp(), DATABASE_ID);
-  const ref = doc(db, REGISTRATIONS, registrationId);
+  const ref = doc(db(), REGISTRATIONS, registrationId);
   await withTimeout(setDoc(ref, buildPayload(input)), WRITE_TIMEOUT_MS);
   return ref.id;
+}
+
+/** A registration as stored in the backend, read back for the signed-in member. */
+export type MyRegistration = {
+  id: string;
+  eventId: string;
+  event: string;
+  status: string;
+  cancelled: boolean;
+};
+
+/**
+ * Read the signed-in member's own registrations from the backend, filtered by
+ * their (lower-cased) email so the query satisfies the ownsRegistration rule.
+ * Requires a signed-in, email-verified member; returns [] otherwise or on error
+ * so a launch-time reconcile never blocks the UI.
+ */
+export async function fetchMyRegistrations(email: string): Promise<MyRegistration[]> {
+  if (!isFirebaseConfigured()) return [];
+  const normalized = normalizeEmail(email);
+  if (!normalized) return [];
+  try {
+    const snap = await withTimeout(
+      getDocs(query(collection(db(), REGISTRATIONS), where("email", "==", normalized))),
+      WRITE_TIMEOUT_MS,
+    );
+    return snap.docs.map((entry) => {
+      const data = entry.data() as Record<string, unknown>;
+      const status = typeof data["status"] === "string" ? (data["status"] as string) : "registered";
+      return {
+        id: entry.id,
+        eventId: typeof data["eventId"] === "string" ? (data["eventId"] as string) : "",
+        event: typeof data["event"] === "string" ? (data["event"] as string) : "PAAIPE event",
+        status,
+        cancelled: status === "cancelled",
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Cancel the member's own registration server-side. Rules forbid client deletes,
+ * so this sets status:'cancelled' (+ cancelled_at) — the only mutation a verified
+ * owner is allowed. Idempotent: re-cancelling an already-cancelled row is a no-op
+ * write the rules still accept.
+ */
+export async function cancelMyRegistration(registrationId: string): Promise<void> {
+  const ref = doc(db(), REGISTRATIONS, registrationId);
+  await withTimeout(
+    updateDoc(ref, { status: "cancelled", cancelled_at: serverTimestamp() }),
+    WRITE_TIMEOUT_MS,
+  );
 }
 
 /**
@@ -142,14 +209,41 @@ export function readRegistrationQueue(): QueuedRegistration[] {
   return readQueue();
 }
 
+/**
+ * Pure queue mutation: add `item`, replacing any existing entry with the same
+ * registrationId so enqueueing is idempotent (a resend of the same registration
+ * can never appear twice). Exported for unit testing without localStorage.
+ */
+export function upsertQueueItem(
+  items: QueuedRegistration[],
+  item: QueuedRegistration,
+): QueuedRegistration[] {
+  return [...items.filter((q) => q.registrationId !== item.registrationId), item];
+}
+
+/** Pure queue mutation: drop the entry with `registrationId` (idempotent). */
+export function removeQueueItem(
+  items: QueuedRegistration[],
+  registrationId: string,
+): QueuedRegistration[] {
+  return items.filter((q) => q.registrationId !== registrationId);
+}
+
+/**
+ * Decide what a flush should do with a write error: keep the item queued for a
+ * later retry, or treat it as settled (a permanent error on a client-minted id
+ * means the doc already committed on an earlier attempt). Pure and testable.
+ */
+export function flushDecision(error: unknown): "remain" | "settled" {
+  return isRetriableRegistrationError(error) ? "remain" : "settled";
+}
+
 export function enqueueRegistration(item: QueuedRegistration): void {
-  const items = readQueue().filter((q) => q.registrationId !== item.registrationId);
-  items.push(item);
-  writeQueue(items);
+  writeQueue(upsertQueueItem(readQueue(), item));
 }
 
 export function dequeueRegistration(registrationId: string): void {
-  writeQueue(readQueue().filter((q) => q.registrationId !== registrationId));
+  writeQueue(removeQueueItem(readQueue(), registrationId));
 }
 
 /** An item that reached a settled state during a flush (written, or confirmed present). */
@@ -172,7 +266,7 @@ export async function flushRegistrationQueue(): Promise<FlushedRegistration[]> {
       await submitEventRegistration(item, item.registrationId);
       settled.push({ registrationId: item.registrationId, eventId: item.eventId });
     } catch (error) {
-      if (isRetriableRegistrationError(error)) {
+      if (flushDecision(error) === "remain") {
         remaining.push(item);
       } else {
         // Non-retriable: the id already committed on a prior attempt (create ->
@@ -182,5 +276,6 @@ export async function flushRegistrationQueue(): Promise<FlushedRegistration[]> {
     }
   }
   writeQueue(remaining);
+  if (settled.length) recordRegistrationEvent("queue_flush_settled", settled.length);
   return settled;
 }
