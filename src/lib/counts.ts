@@ -13,10 +13,19 @@ export type EventCounts = {
   generatedAt: string;
 };
 
+/**
+ * The deployed `eventRegistrationCounts` Cloud Function (project postflowit-autos,
+ * asia-southeast1). Compiled in as the default so a plain build shows real totals;
+ * override with `VITE_PAAIPE_COUNTS_URL` to point at a different deployment.
+ */
+const DEFAULT_COUNTS_URL =
+  "https://asia-southeast1-postflowit-autos.cloudfunctions.net/eventRegistrationCounts";
+
 function readCountsUrl(): string {
   const env = (import.meta as { env?: Record<string, unknown> }).env;
   const value = env?.["VITE_PAAIPE_COUNTS_URL"];
-  return typeof value === "string" && value.trim() ? value.trim() : "";
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return DEFAULT_COUNTS_URL;
 }
 
 export function countsEndpointConfigured(): boolean {

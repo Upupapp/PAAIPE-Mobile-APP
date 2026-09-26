@@ -86,10 +86,19 @@ export function offlineWriteRate(
 
 const TELEMETRY_ID_KEY = "paaipe-telemetry-id";
 
+/**
+ * The deployed `telemetryIngest` Cloud Function (project postflowit-autos,
+ * asia-southeast1). Compiled in as the default so a plain build reports the
+ * anonymous, aggregate offline rate; override with `VITE_PAAIPE_TELEMETRY_URL`.
+ */
+const DEFAULT_TELEMETRY_URL =
+  "https://asia-southeast1-postflowit-autos.cloudfunctions.net/telemetryIngest";
+
 function readTelemetryUrl(): string {
   const env = (import.meta as { env?: Record<string, unknown> }).env;
   const value = env?.["VITE_PAAIPE_TELEMETRY_URL"];
-  return typeof value === "string" && value.trim() ? value.trim() : "";
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return DEFAULT_TELEMETRY_URL;
 }
 
 export function telemetryEndpointConfigured(): boolean {
