@@ -308,7 +308,14 @@ export type DirectoryMember = {
   name: string;
   initials: string;
   agentNumber: string | null;
+  /** Position or professional role (paaipe_agents.headline). */
   role?: string;
+  /** Company / organization (paaipe_agents.organization). */
+  company?: string;
+  /** Short introduction (paaipe_agents.about). */
+  about?: string;
+  /** A link the member shares (paaipe_agents.link). */
+  link?: string;
   photo?: string;
 };
 export type DirectoryPage = {

@@ -46,11 +46,21 @@ export async function getDirectoryFromFirestore(offset = 0): Promise<DirectoryPa
       const name = (typeof data["full_name"] === "string" && data["full_name"].trim()) || "Member";
       const photo = typeof data["photoUrl"] === "string" ? data["photoUrl"] : "";
       const agentNumber = data["agentNumber"] == null ? null : String(data["agentNumber"]);
+      const str = (key: string): string =>
+        typeof data[key] === "string" ? (data[key] as string).trim() : "";
+      const company = str("organization");
+      const role = str("headline");
+      const about = str("about");
+      const link = str("link");
       return {
         uid: docSnap.id,
         name,
         initials: initialsFromName(name),
         agentNumber,
+        ...(role ? { role } : {}),
+        ...(company ? { company } : {}),
+        ...(about ? { about } : {}),
+        ...(link ? { link } : {}),
         ...(photo ? { photo } : {}),
       };
     })

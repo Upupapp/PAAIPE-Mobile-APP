@@ -88,6 +88,7 @@ import {
   rejectPhotoFile,
 } from "../lib/media";
 import { getDirectoryFromFirestore } from "../lib/directory";
+import { readAgentProfile, writeAgentProfile } from "../lib/agent-profile";
 import { tryPatchProfile } from "../lib/auth-context";
 import { type DisplayIdentity } from "../lib/profile-display";
 import { openExternalUrl } from "../lib/legal-links";
@@ -337,16 +338,32 @@ const PREVIEW_DIRECTORY: DirectoryMember[] = [
     name: "Ava Cruz",
     initials: "AC",
     agentNumber: "0142",
-    role: "Product lead, Northwind",
+    role: "Product lead",
+    company: "Northwind",
   },
-  { uid: "d-marco", name: "Marco Reyes", initials: "MR", agentNumber: "0098", role: "ML engineer" },
-  { uid: "d-liza", name: "Liza Tan", initials: "LT", agentNumber: "0211", role: "Data scientist" },
+  {
+    uid: "d-marco",
+    name: "Marco Reyes",
+    initials: "MR",
+    agentNumber: "0098",
+    role: "ML engineer",
+    company: "Globe Labs",
+  },
+  {
+    uid: "d-liza",
+    name: "Liza Tan",
+    initials: "LT",
+    agentNumber: "0211",
+    role: "Data scientist",
+    company: "Maya",
+  },
   {
     uid: "d-jomar",
     name: "Jomar Dela Cruz",
     initials: "JD",
     agentNumber: "0176",
-    role: "Founder, Kalibrr AI",
+    role: "Founder",
+    company: "Kalibrr AI",
   },
   {
     uid: "d-nina",
@@ -354,6 +371,7 @@ const PREVIEW_DIRECTORY: DirectoryMember[] = [
     initials: "NV",
     agentNumber: "0203",
     role: "AI researcher",
+    company: "UP Diliman",
   },
 ];
 
@@ -497,21 +515,23 @@ export function MobileAgentPortal() {
   useEffect(() => {
     if (!signedIn || !user) return;
     let alive = true;
-    void readAgentPhotoUrl(user.uid).then((url) => {
-      if (!alive || !url) return;
-      setPublicCard((current) => {
-        if (current?.photo) return current;
-        return {
+    // Firestore is the shared source of truth for these fields (the web portal
+    // reads and writes the same paaipe_agents record), so on sign-in we seed the
+    // card from it — this is how a company/bio edited on the web shows up here.
+    void Promise.all([readAgentPhotoUrl(user.uid), readAgentProfile(user.uid)]).then(
+      ([url, fields]) => {
+        if (!alive) return;
+        setPublicCard((current) => ({
           name: current?.name ?? "",
-          headline: current?.headline ?? "",
-          about: current?.about ?? "",
-          work: current?.work ?? "",
-          link: current?.link ?? "",
+          headline: fields.headline || current?.headline || "",
+          about: fields.about || current?.about || "",
+          work: fields.organization || current?.work || "",
+          link: fields.link || current?.link || "",
           directoryVisible: current?.directoryVisible ?? false,
-          photo: url,
-        };
-      });
-    });
+          photo: url || current?.photo || "",
+        }));
+      },
+    );
     return () => {
       alive = false;
     };
@@ -551,6 +571,9 @@ export function MobileAgentPortal() {
           initials: initialsFromName(publicCard.name, portalIdentity?.email ?? ""),
           agentNumber: portalIdentity?.agentNumber ?? null,
           ...(publicCard.headline.trim() ? { role: publicCard.headline.trim() } : {}),
+          ...(publicCard.work.trim() ? { company: publicCard.work.trim() } : {}),
+          ...(publicCard.about.trim() ? { about: publicCard.about.trim() } : {}),
+          ...(publicCard.link.trim() ? { link: publicCard.link.trim() } : {}),
           ...(publicCard.photo ? { photo: publicCard.photo } : {}),
         }
       : null;
@@ -1122,6 +1145,14 @@ export function MobileAgentPortal() {
     await tryPatchProfile(user, {
       full_name: saved.name,
       directoryVisible: saved.directoryVisible,
+    });
+    // Company (organization), headline, about and link live on the shared
+    // paaipe_agents record so the web portal sees the same values.
+    await writeAgentProfile(user.uid, {
+      organization: saved.work,
+      headline: saved.headline,
+      about: saved.about,
+      link: saved.link,
     });
     await refreshProfile();
   };
@@ -4255,7 +4286,7 @@ function EditProfileView({
       setSaved(true);
     } catch {
       setError(
-        "The name could not be saved to your account. The public preview on this device was kept.",
+        "Some changes could not be saved to your account. The preview on this device was kept.",
       );
     } finally {
       setSaving(false);
@@ -4269,7 +4300,7 @@ function EditProfileView({
         title="Edit profile"
         subtitle={
           signedIn
-            ? "Name, photo, and directory visibility save to your account. About, work, and the link stay on this device."
+            ? "Your name, photo, company, bio and directory visibility save to your account and sync with the web portal."
             : "This preview keeps your edits on this device."
         }
       />
@@ -4343,11 +4374,11 @@ function EditProfileView({
           />
         </label>
         <label>
-          Work
+          Company or organization
           <input
             value={work}
             onChange={(event) => setWork(event.target.value)}
-            placeholder="Role and organization"
+            placeholder="Company, school or agency"
           />
         </label>
         <label>
@@ -4408,8 +4439,8 @@ function PublicProfileView({
       </article>
       <article className="program-card">
         <div>
-          <strong>Work</strong>
-          <p>{work || "No work details yet."}</p>
+          <strong>Company</strong>
+          <p>{work || "No company details yet."}</p>
         </div>
       </article>
       {link ? (
@@ -4434,7 +4465,7 @@ function DirectoryView({
 }) {
   const [query, setQuery] = useState("");
   const shown = members.filter((m) =>
-    (m.name + (m.role || "")).toLowerCase().includes(query.toLowerCase()),
+    (m.name + (m.company || "") + (m.role || "")).toLowerCase().includes(query.toLowerCase()),
   );
   return (
     <div className="screen-stack animate-fade-in page-screen">
@@ -4467,7 +4498,9 @@ function DirectoryView({
               </div>
               <strong>{m.name}</strong>
               <span>
-                {m.role || (m.agentNumber ? `Agent ${m.agentNumber}` : "Confirmed Agent")}
+                {m.company ||
+                  m.role ||
+                  (m.agentNumber ? `Agent ${m.agentNumber}` : "Confirmed Agent")}
               </span>
             </button>
           ))}
@@ -4493,6 +4526,7 @@ function MemberProfileView({ member }: { member: DirectoryMember | null }) {
         </div>
         <h1>{member.name}</h1>
         {member.role ? <p className="public-headline">{member.role}</p> : null}
+        {member.company ? <p className="public-headline">{member.company}</p> : null}
         <span className="membership-pill status-agent">
           <i aria-hidden="true" />
           Confirmed Agent
@@ -4502,15 +4536,27 @@ function MemberProfileView({ member }: { member: DirectoryMember | null }) {
       <article className="program-card">
         <div>
           <strong>About</strong>
-          <p>This member has not added an introduction yet.</p>
+          <p>{member.about || "This member has not added an introduction yet."}</p>
         </div>
       </article>
       <article className="program-card">
         <div>
-          <strong>Work</strong>
-          <p>{member.role || "No work details shared yet."}</p>
+          <strong>Company</strong>
+          <p>{member.company || "No company shared yet."}</p>
         </div>
       </article>
+      {member.link ? (
+        <article className="program-card">
+          <div>
+            <strong>Link</strong>
+            <p>
+              <a href={member.link} target="_blank" rel="noreferrer noopener">
+                {member.link}
+              </a>
+            </p>
+          </div>
+        </article>
+      ) : null}
       <div className="empty-note">
         Member profiles show what each Agent chooses to share in the directory.
       </div>
