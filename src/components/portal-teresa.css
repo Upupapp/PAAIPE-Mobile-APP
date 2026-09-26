@@ -1308,6 +1308,28 @@
   font-size: 13px;
   line-height: 1.4;
 }
+.portal-shell.teresa-inside .speaker-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.portal-shell.teresa-inside .speaker-avatar {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  font-size: 18px;
+}
+.portal-shell.teresa-inside .speaker-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.portal-shell.teresa-inside .speaker-avatar svg {
+  width: 26px;
+  height: 26px;
+}
 .portal-shell.teresa-inside .copy-block,
 .portal-shell.teresa-inside .partner-disclaimer {
   font-size: 13px;
@@ -1954,6 +1976,12 @@ html.is-native .portal-shell.teresa-inside .drawer-layer {
   background: #fff;
   box-shadow: 0 12px 30px rgba(11, 27, 58, 0.1);
   text-align: center;
+}
+.portal-shell.teresa-inside .ticket-card > .banner-slot {
+  margin: 0;
+  width: 100%;
+  justify-self: stretch;
+  border-radius: 16px;
 }
 .portal-shell.teresa-inside .ticket-head {
   display: flex;

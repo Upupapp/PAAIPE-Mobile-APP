@@ -204,6 +204,7 @@ export type ApiSession = {
   title?: string;
   description?: string;
   speaker?: string;
+  speakerPhotoUrl?: string;
   youtubeUrl?: string;
   youtubeId?: string;
   posterUrl?: string;

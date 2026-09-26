@@ -205,6 +205,8 @@ export type EventTicket = {
   reference: string;
   createdAt: string;
   synced: boolean;
+  /** Event banner shown on the confirmation/QR pass, when the event has one. */
+  coverUrl?: string;
   /** A signed-in member's write that failed to send and is queued to resend. */
   pending?: boolean;
 };
@@ -306,6 +308,7 @@ const PREVIEW_EVENTS: ApiEvent[] = [
     topic: "Sample topic — preview content",
     description:
       "Preview sample. Real Exchanges appear here when the association publishes them.",
+    coverUrl: "/banners/events/events-banner@1x.png",
   },
   {
     id: "prev-ev-build-night",
@@ -524,6 +527,7 @@ export function MobileAgentPortal() {
           createdAt: new Date().toISOString(),
           synced: true,
           pending: false,
+          ...(event?.coverUrl ? { coverUrl: event.coverUrl } : {}),
         };
         changed = true;
       }
@@ -816,6 +820,7 @@ export function MobileAgentPortal() {
       createdAt: new Date().toISOString(),
       synced,
       pending,
+      ...(event.coverUrl ? { coverUrl: event.coverUrl } : {}),
     };
     setTickets((current) => {
       const next = { ...current, [event.id]: ticket };
@@ -2449,6 +2454,11 @@ function EventsView({
             <ArrowLeft /> {selected.title || "Event"}
           </button>
           <section className="ticket-card">
+            <BannerSlot
+              label="Event banner"
+              {...(ticket.coverUrl ? { src: ticket.coverUrl } : {})}
+              alt={ticket.eventTitle}
+            />
             <div className="ticket-head">
               <img src={logo} alt="PAAIPE" />
               <span className={`soft-chip ${ticket.synced ? "ok" : ticket.pending ? "warn" : "ok"}`}>
@@ -2561,6 +2571,11 @@ function EventsView({
           kicker={held ? "Recap" : "Upcoming"}
           title={selected.title || "AI Exchange"}
           subtitle={selected.topic || selected.description || "Topic to be announced"}
+        />
+        <BannerSlot
+          label="Event banner"
+          {...(selected.coverUrl ? { src: selected.coverUrl } : {})}
+          alt={selected.title || "PAAIPE event"}
         />
         <div className="event-meta">
           <span>
@@ -3756,13 +3771,24 @@ function SessionView({
       </div>
       {!videoUrl && <div className="empty-note">A recording is not available for this session yet.</div>}
       <h2 className="subheading">Speaker</h2>
-      <article className="program-card">
+      <article className="program-card speaker-card">
+        <div className="avatar speaker-avatar">
+          {session?.speakerPhotoUrl ? (
+            <img src={session.speakerPhotoUrl} alt={session.speaker || "Speaker"} />
+          ) : session?.speaker ? (
+            initialsFromName(session.speaker)
+          ) : (
+            <UserRound aria-hidden="true" />
+          )}
+        </div>
         <div>
           <strong>{session?.speaker || "Speaker"}</strong>
           <p>
-            {session?.speaker
+            {session?.speakerPhotoUrl
               ? "Speaker for this session."
-              : "The speaker name is shown when the published session includes one."}
+              : session?.speaker
+                ? "Speaker for this session. A photo appears when the speaker adds one."
+                : "The speaker name and photo are shown when the published session includes them."}
           </p>
         </div>
       </article>
