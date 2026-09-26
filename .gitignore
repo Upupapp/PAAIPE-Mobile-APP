@@ -43,8 +43,7 @@ dist-ssr
 /_sim-smoke/
 /_store-upload/
 
-# Private environment and signing material
-.env
+# Private environment and signing material.env
 .env.*
 !.env.example
 *.jks
@@ -53,3 +52,9 @@ dist-ssr
 *.p8
 *.mobileprovision
 *.pem
+
+# Firebase emulator artifacts (integration tests)
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+tests/integration/firebase-export-*/

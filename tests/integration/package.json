@@ -1,0 +1,9 @@
+{
+  "name": "paaipe-integration-tests",
+  "private": true,
+  "type": "module",
+  "description": "Firestore-emulator integration tests (firebase-tools installed locally; gitignored)",
+  "devDependencies": {
+    "firebase-tools": "^13.0.0"
+  }
+}

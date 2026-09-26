@@ -15,7 +15,8 @@
     "cap:android": "bunx cap open android",
     "cap:copy": "bunx cap copy",
     "cap:update": "bunx cap update",
-    "test": "bun test"
+    "test": "bun test",
+    "test:integration": "sh tests/integration/run.sh"
   },
   "overrides": {
     "rolldown": "1.2.1"

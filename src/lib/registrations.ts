@@ -29,10 +29,21 @@ import {
 import { getFirebaseApp, isFirebaseConfigured, DOC_VERSIONS } from "./firebase";
 import { recordRegistrationEvent } from "./telemetry";
 
-const DATABASE_ID = "paaipe";
+const DATABASE_ID = readDatabaseId();
 const REGISTRATIONS = "paaipe_event_registrations";
 const QUEUE_KEY = "paaipe-registration-queue";
 const WRITE_TIMEOUT_MS = 15000;
+
+/**
+ * PAAIPE's named Firestore database, "paaipe" by default. Overridable via
+ * VITE_FIRESTORE_DATABASE_ID for environments that use a different database
+ * (e.g. the Firestore emulator, which serves rules on its default database).
+ */
+function readDatabaseId(): string {
+  const env = (import.meta as { env?: Record<string, unknown> }).env;
+  const value = env?.["VITE_FIRESTORE_DATABASE_ID"];
+  return typeof value === "string" && value.trim() ? value : "paaipe";
+}
 
 export type RegistrationInput = {
   eventId: string;
