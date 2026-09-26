@@ -1654,6 +1654,68 @@ html.is-native .portal-shell.teresa-inside .drawer-layer {
 .portal-shell.teresa-inside .home-membership {
   margin: 16px 16px 0;
 }
+/* Standardize the vertical rhythm between home widgets: a single gap on the
+   column, and no per-child top margins/paddings that would double it up. */
+.portal-shell.teresa-inside .home-screen {
+  gap: 20px;
+  padding-bottom: 8px;
+}
+.portal-shell.teresa-inside .home-screen > .home-membership,
+.portal-shell.teresa-inside .home-screen > .circle-menu,
+.portal-shell.teresa-inside .home-screen > .banner-slot,
+.portal-shell.teresa-inside .home-screen > .section-block,
+.portal-shell.teresa-inside .home-screen > .settings-list {
+  margin-top: 0;
+  padding-top: 0;
+}
+.portal-shell.teresa-inside .home-screen > .settings-list {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+/* Four circular quick-links above the main banner. */
+.portal-shell.teresa-inside .circle-menu {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 0 16px;
+}
+.portal-shell.teresa-inside .circle-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.portal-shell.teresa-inside .circle-menu-art {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--sw-blue-soft, #eef3ff);
+  box-shadow: 0 6px 16px rgba(11, 27, 58, 0.12);
+  transition: transform 0.15s ease;
+}
+.portal-shell.teresa-inside .circle-menu-item:active .circle-menu-art {
+  transform: scale(0.94);
+}
+.portal-shell.teresa-inside .circle-menu-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.portal-shell.teresa-inside .circle-menu-item small {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sw-ink, #22314f);
+  line-height: 1.2;
+  text-align: center;
+}
 .portal-shell.teresa-inside .membership-panel h2 {
   font-size: 16px;
   font-weight: 500;

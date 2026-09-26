@@ -1092,6 +1092,8 @@ export function MobileAgentPortal() {
               onBenefits={() => select("Benefits", { fromSheet: true })}
               onProfile={() => select("Profile")}
               onPrograms={() => select("Programs", { fromSheet: true })}
+              onDirectory={() => select("Directory", { fromSheet: true })}
+              onOrganizations={() => select("Organization", { fromSheet: true })}
               onSession={openSession}
             />
           )}
@@ -1428,6 +1430,8 @@ function HomeView({
   onBenefits,
   onProfile,
   onPrograms,
+  onDirectory,
+  onOrganizations,
   onSession,
 }: {
   identity: DisplayIdentity;
@@ -1439,6 +1443,8 @@ function HomeView({
   onBenefits: () => void;
   onProfile: () => void;
   onPrograms: () => void;
+  onDirectory: () => void;
+  onOrganizations: () => void;
   onSession: (session: ApiSession) => void;
 }) {
   const upcoming =
@@ -1469,7 +1475,7 @@ function HomeView({
     when: "Portal",
   });
   return (
-    <div className="screen-stack animate-fade-in">
+    <div className="screen-stack home-screen animate-fade-in">
       <section className="welcome-panel">
         <div className="welcome-copy">
           <h1>Welcome back, {identity.firstName}.</h1>
@@ -1497,6 +1503,30 @@ function HomeView({
       <div className="home-membership">
         <MembershipPanel />
       </div>
+      <nav className="circle-menu" aria-label="Quick links">
+        {[
+          { label: "Benefits", icon: "/menu/menu-benefits.png", onClick: onBenefits },
+          { label: "Directory", icon: "/menu/menu-directory.png", onClick: onDirectory },
+          { label: "Programs", icon: "/menu/menu-programs.png", onClick: onPrograms },
+          {
+            label: "Organizations",
+            icon: "/menu/menu-organizations.png",
+            onClick: onOrganizations,
+          },
+        ].map((item) => (
+          <button
+            type="button"
+            className="circle-menu-item"
+            key={item.label}
+            onClick={item.onClick}
+          >
+            <span className="circle-menu-art">
+              <img src={item.icon} alt="" loading="lazy" decoding="async" />
+            </span>
+            <small>{item.label}</small>
+          </button>
+        ))}
+      </nav>
       <BannerSlot
         label="Home banner"
         src="/banners/home/home-banner@1x.png"
