@@ -649,6 +649,20 @@
   background: #000;
   display: block;
 }
+.portal-shell.teresa-inside .reels-page .reels-embed {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #000;
+}
+.portal-shell.teresa-inside .reels-page .reels-poster {
+  width: 100%;
+  height: 100%;
+  background-color: #05060a;
+  background-size: cover;
+  background-position: center;
+}
 .portal-shell.teresa-inside .reels-overlay {
   position: absolute;
   left: 0;

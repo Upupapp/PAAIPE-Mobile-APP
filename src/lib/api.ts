@@ -205,12 +205,45 @@ export type ApiSession = {
   description?: string;
   speaker?: string;
   speakerPhotoUrl?: string;
+  source?: string;
   youtubeUrl?: string;
   youtubeId?: string;
+  storagePath?: string;
   posterUrl?: string;
   published?: boolean;
   displayOrder?: number;
+  aspect?: string;
 };
+export type ApiMicro = ApiSession;
+export type ApiPlaylist = {
+  id: string;
+  title?: string;
+  description?: string;
+  kind?: "sessions" | "micros";
+  itemIds?: string[];
+  status?: string;
+  displayOrder?: number;
+};
+/**
+ * The static site stores media as URLs relative to the marketing site
+ * (e.g. "assets/img/x.jpg") or as storage paths served from the media host
+ * (e.g. "micros/x.mp4"). Resolve both to absolute URLs the mobile app can load.
+ */
+const SITE_BASE = "https://paaipe.org";
+export function resolveAssetUrl(url?: string | null): string | undefined {
+  if (!url || typeof url !== "string") return undefined;
+  const trimmed = url.trim();
+  if (!trimmed) return undefined;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `${SITE_BASE}/${trimmed.replace(/^\/+/, "")}`;
+}
+export function resolveMediaUrl(path?: string | null): string | undefined {
+  if (!path || typeof path !== "string") return undefined;
+  const trimmed = path.trim();
+  if (!trimmed) return undefined;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `${MEDIA_BASE}/${trimmed.replace(/^\/+/, "")}`;
+}
 export function parseList<T extends { id: string }>(raw: unknown, key: string): T[] {
   const list = Array.isArray(raw) ? raw : record(raw)[key];
   if (
@@ -221,12 +254,37 @@ export function parseList<T extends { id: string }>(raw: unknown, key: string): 
   return list as T[];
 }
 export async function getEvents(): Promise<ApiEvent[]> {
-  return parseList(await apiRequest({ path: "/v1/events" }), "events");
+  const events = parseList<ApiEvent>(await apiRequest({ path: "/v1/events" }), "events");
+  return events.map((event) => {
+    const cover = resolveAssetUrl(event.coverUrl);
+    return cover ? { ...event, coverUrl: cover } : event;
+  });
 }
 export async function getSessions(): Promise<ApiSession[]> {
-  return parseList<ApiSession>(await apiRequest({ path: "/v1/sessions" }), "sessions").filter(
-    (item) => item.published === true,
-  );
+  return parseList<ApiSession>(await apiRequest({ path: "/v1/sessions" }), "sessions")
+    .filter((item) => item.published === true)
+    .map(resolveSessionMedia)
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+}
+export async function getMicros(): Promise<ApiMicro[]> {
+  return parseList<ApiMicro>(await apiRequest({ path: "/v1/micros" }), "micros")
+    .filter((item) => item.published === true)
+    .map(resolveSessionMedia)
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+}
+export async function getPlaylists(): Promise<ApiPlaylist[]> {
+  return parseList<ApiPlaylist>(await apiRequest({ path: "/v1/playlists" }), "playlists")
+    .filter((item) => item.status === "published")
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+}
+/** Resolve a session/micro's poster and (for uploads) its video source to absolute URLs. */
+function resolveSessionMedia<T extends ApiSession>(item: T): T {
+  const poster = resolveAssetUrl(item.posterUrl);
+  const media = resolveMediaUrl(item.storagePath);
+  const next: T = { ...item };
+  if (poster) next.posterUrl = poster;
+  if (media) next.storagePath = media;
+  return next;
 }
 export type DirectoryMember = {
   uid: string;

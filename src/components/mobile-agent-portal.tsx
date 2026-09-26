@@ -53,10 +53,14 @@ import { useAuth } from "../lib/auth-context";
 import {
   getEvents,
   getSessions,
+  getMicros,
+  getPlaylists,
   getDirectory,
   initialsFromName,
   type ApiEvent,
   type ApiSession,
+  type ApiMicro,
+  type ApiPlaylist,
   type DirectoryMember,
 } from "../lib/api";
 import { tryPatchProfile } from "../lib/auth-context";
@@ -388,6 +392,49 @@ const PREVIEW_SESSIONS: ApiSession[] = [
   },
 ];
 
+const PREVIEW_MICROS: ApiMicro[] = [
+  {
+    id: "prev-m-prompt",
+    title: "Prompt in 30s (sample)",
+    description: "Preview sample micro. Real vertical micros appear here when published.",
+    speaker: "Sample Speaker",
+    source: "youtube",
+    youtubeId: "dQw4w9WgXcQ",
+    aspect: "9:16",
+    published: true,
+    displayOrder: 1,
+  },
+  {
+    id: "prev-m-agents",
+    title: "Why become an Agent (sample)",
+    description: "Preview sample micro without a video source.",
+    aspect: "9:16",
+    published: true,
+    displayOrder: 2,
+  },
+];
+
+const PREVIEW_PLAYLISTS: ApiPlaylist[] = [
+  {
+    id: "prev-pl-onboarding",
+    title: "New member onboarding (sample)",
+    description: "Preview sample playlist. Real playlists appear here when published.",
+    kind: "sessions",
+    itemIds: ["prev-s-signals", "prev-s-prompting"],
+    status: "published",
+    displayOrder: 1,
+  },
+  {
+    id: "prev-pl-micros",
+    title: "Quick wins (sample)",
+    description: "Preview sample playlist of short micros.",
+    kind: "micros",
+    itemIds: ["prev-m-prompt"],
+    status: "published",
+    displayOrder: 2,
+  },
+];
+
 const READY_RETRY = () => {};
 function readyLoadable<T>(data: T): Loadable<T> {
   return { state: "ready", data, error: null, retry: READY_RETRY };
@@ -418,14 +465,23 @@ export function MobileAgentPortal() {
     showPortal && !usePreviewData ? "sessions" : null,
     getSessions,
   );
+  const liveMicroData = useLoadable(showPortal && !usePreviewData ? "micros" : null, getMicros);
+  const livePlaylistData = useLoadable(
+    showPortal && !usePreviewData ? "playlists" : null,
+    getPlaylists,
+  );
   const eventData = usePreviewData ? readyLoadable(PREVIEW_EVENTS) : liveEventData;
   const sessionData = usePreviewData ? readyLoadable(PREVIEW_SESSIONS) : liveSessionData;
+  const microData = usePreviewData ? readyLoadable(PREVIEW_MICROS) : liveMicroData;
+  const playlistData = usePreviewData ? readyLoadable(PREVIEW_PLAYLISTS) : livePlaylistData;
   const directoryData = useLoadable(
     accountKey ? `${accountKey}:${directoryOffset}` : null,
     async () => getDirectory(await user!.getIdToken(), directoryOffset),
   );
   const events = eventData.data ?? [];
   const sessions = sessionData.data ?? [];
+  const micros = microData.data ?? [];
+  const playlists = playlistData.data ?? [];
   const baseDirectory =
     preview && !signedIn ? PREVIEW_DIRECTORY : (directoryData.data?.members ?? []);
   const selfMember: DirectoryMember | null =
@@ -1101,6 +1157,10 @@ export function MobileAgentPortal() {
             <LearnView
               sessions={sessions}
               loadState={sessionData}
+              micros={micros}
+              microState={microData}
+              playlists={playlists}
+              playlistState={playlistData}
               lane={learnLane}
               onLane={setLearnLane}
               onOpen={openSession}
@@ -1855,7 +1915,7 @@ const FEED_REELS: FeedReel[] = [
   },
 ];
 
-function MicrosReels() {
+function MicrosReels({ micros }: { micros: ApiMicro[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const root = containerRef.current;
@@ -1876,19 +1936,50 @@ function MicrosReels() {
     );
     for (const video of videos) observer.observe(video);
     return () => observer.disconnect();
-  }, []);
+  }, [micros]);
   return (
     <div className="reels-feed" ref={containerRef}>
-      {FEED_REELS.map((reel) => (
-        <section className="reels-page" key={reel.id}>
-          <video src={reel.src} poster={reel.poster} muted loop playsInline preload="metadata" />
-          <div className="reels-overlay">
-            <strong>{reel.title}</strong>
-            <small>{reel.author}</small>
-            <p>{reel.caption}</p>
-          </div>
-        </section>
-      ))}
+      {micros.map((micro) => {
+        const youtubeEmbed =
+          micro.source !== "upload" && micro.youtubeId
+            ? `https://www.youtube.com/embed/${micro.youtubeId}?rel=0&playsinline=1`
+            : null;
+        return (
+          <section className="reels-page" key={micro.id}>
+            {youtubeEmbed ? (
+              <iframe
+                className="reels-embed"
+                src={youtubeEmbed}
+                title={micro.title || "Micro"}
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            ) : micro.storagePath ? (
+              <video
+                src={micro.storagePath}
+                {...(micro.posterUrl ? { poster: micro.posterUrl } : {})}
+                muted
+                loop
+                playsInline
+                preload="metadata"
+              />
+            ) : (
+              <div
+                className="reels-poster"
+                style={
+                  micro.posterUrl ? { backgroundImage: `url(${micro.posterUrl})` } : undefined
+                }
+              />
+            )}
+            <div className="reels-overlay">
+              <strong>{micro.title || "Micro"}</strong>
+              {micro.speaker ? <small>{micro.speaker}</small> : null}
+              {micro.description ? <p>{micro.description}</p> : null}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -1896,12 +1987,20 @@ function MicrosReels() {
 function LearnView({
   sessions,
   loadState,
+  micros,
+  microState,
+  playlists,
+  playlistState,
   lane,
   onLane,
   onOpen,
 }: {
   sessions: ApiSession[];
   loadState: Loadable<ApiSession[]>;
+  micros: ApiMicro[];
+  microState: Loadable<ApiMicro[]>;
+  playlists: ApiPlaylist[];
+  playlistState: Loadable<ApiPlaylist[]>;
   lane: LearnLane;
   onLane: (lane: LearnLane) => void;
   onOpen: (session: ApiSession) => void;
@@ -2051,19 +2150,80 @@ function LearnView({
           )}
         </DataState>
       )}
-      {lane === "Micros" && <MicrosReels />}
+      {lane === "Micros" && (
+        <DataState result={microState} label="Micros">
+          {(() => {
+            const shownMicros = micros.filter((item) =>
+              (item.title || "").toLowerCase().includes(query.toLowerCase()),
+            );
+            if (shownMicros.length === 0) {
+              return (
+                <div className="visual-grid">
+                  <VisualCard
+                    kind="Micro"
+                    title={query ? "No matches" : "No micros yet"}
+                    description={
+                      query
+                        ? "No micros match your search."
+                        : "Short vertical micros appear here in the order set for members."
+                    }
+                    meta="Vertical micro"
+                  />
+                </div>
+              );
+            }
+            return <MicrosReels micros={shownMicros} />;
+          })()}
+        </DataState>
+      )}
       {lane === "Playlists" && (
-        <div className="visual-grid">
-          <VisualCard
-            kind="Playlist"
-            title="No playlists yet"
-            description="A playlist combines micros or sessions."
-            meta="Micros or sessions"
-          />
-        </div>
+        <DataState result={playlistState} label="Playlists">
+          {(() => {
+            const shownPlaylists = playlists.filter((item) =>
+              (item.title || "").toLowerCase().includes(query.toLowerCase()),
+            );
+            if (shownPlaylists.length === 0) {
+              return (
+                <div className="visual-grid">
+                  <VisualCard
+                    kind="Playlist"
+                    title={query ? "No matches" : "No playlists yet"}
+                    description={
+                      query
+                        ? "No playlists match your search."
+                        : "A playlist combines micros or sessions. Published playlists appear here."
+                    }
+                    meta="Micros or sessions"
+                  />
+                </div>
+              );
+            }
+            return (
+              <div className="visual-grid">
+                {shownPlaylists.map((item) => {
+                  const count = item.itemIds?.length ?? 0;
+                  const kindLabel = item.kind === "micros" ? "micros" : "sessions";
+                  return (
+                    <VisualCard
+                      key={item.id}
+                      kind="Playlist"
+                      title={item.title || "Playlist"}
+                      description={item.description || `A playlist of ${kindLabel}.`}
+                      meta={count ? `${count} ${count === 1 ? kindLabel.slice(0, -1) : kindLabel}` : kindLabel}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </DataState>
       )}
       {lane === "Resources" && (
         <>
+          <div className="empty-note">
+            Resources are a curated file set in this build. There is no live resources collection to
+            connect yet — sessions, micros, and playlists above load live from PAAIPE.
+          </div>
           <button className="format-trigger" type="button" onClick={() => setFormatsOpen(true)}>
             <FileText />
             <span>
