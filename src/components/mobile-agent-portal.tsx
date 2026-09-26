@@ -642,6 +642,27 @@ export function MobileAgentPortal() {
     };
   }, [signedIn, syncPendingRegistrations, reconcileTickets]);
 
+  // Real per-event registered counts from the aggregate endpoint, when it is
+  // configured. Declared above the early returns below so hook order is stable.
+  const [eventCounts, setEventCounts] = useState<EventCounts | null>(null);
+  useEffect(() => {
+    if (!showPortal || !countsEndpointConfigured()) return;
+    let active = true;
+    const load = () => {
+      void fetchEventCounts().then((data) => {
+        if (active && data) setEventCounts(data);
+      });
+    };
+    load();
+    window.addEventListener("online", load);
+    window.addEventListener("paaipe:resume", load);
+    return () => {
+      active = false;
+      window.removeEventListener("online", load);
+      window.removeEventListener("paaipe:resume", load);
+    };
+  }, [showPortal]);
+
   const triggerArrive = () => {
     setArriveTick((n) => n + 1);
   };
@@ -974,24 +995,6 @@ export function MobileAgentPortal() {
   };
   const unreadCount = notifications.filter((item) => !item.read).length;
   const pendingRegistrations = Object.values(tickets).filter((ticket) => ticket.pending).length;
-  const [eventCounts, setEventCounts] = useState<EventCounts | null>(null);
-  useEffect(() => {
-    if (!showPortal || !countsEndpointConfigured()) return;
-    let active = true;
-    const load = () => {
-      void fetchEventCounts().then((data) => {
-        if (active && data) setEventCounts(data);
-      });
-    };
-    load();
-    window.addEventListener("online", load);
-    window.addEventListener("paaipe:resume", load);
-    return () => {
-      active = false;
-      window.removeEventListener("online", load);
-      window.removeEventListener("paaipe:resume", load);
-    };
-  }, [showPortal]);
   const savePublicCard = async (next: PublicCard) => {
     const saved = { ...next, name: next.name.trim() };
     setPublicCard(saved);
