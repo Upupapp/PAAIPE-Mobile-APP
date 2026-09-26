@@ -7,7 +7,7 @@
  * member's `paaipe_agents/{uid}` document in the named Firestore database
  * ("paaipe"). A failed upload never invents a URL and never marks a photo saved.
  */
-import { doc, getDoc, getFirestore, setDoc, type Firestore } from "firebase/firestore";
+import { doc, getDoc, getFirestore, updateDoc, type Firestore } from "firebase/firestore";
 import { MEDIA_BASE } from "./api";
 import { getFirebaseApp } from "./firebase";
 
@@ -81,10 +81,26 @@ export async function uploadProfilePhoto(file: File, token: string): Promise<str
   return url;
 }
 
+/**
+ * The exact photoUrl the Firestore rules accept for a member's own agent
+ * document: their own canonical media path, or empty to clear it. Mirrors the
+ * `paaipe_agents` update rule so a bad URL fails here with a clear message
+ * instead of an opaque permission-denied from the server.
+ */
+function agentPhotoUrlAllowed(uid: string, url: string): boolean {
+  if (url === "") return true;
+  return new RegExp(`^https://media\\.paaipe\\.org/agents/${uid}/profile\\.(jpg|png|webp)$`).test(
+    url,
+  );
+}
+
 /** Persist (or clear) the member's photoUrl on their agent document. */
 export async function persistAgentPhotoUrl(uid: string, photoUrl: string): Promise<void> {
   if (!uid) throw new Error("A signed-in member is required to save a photo.");
-  await setDoc(doc(db(), AGENTS, uid), { photoUrl: photoUrl || "" }, { merge: true });
+  const value = photoUrl || "";
+  if (!agentPhotoUrlAllowed(uid, value))
+    throw new Error("That is not your profile photo URL. Nothing was saved.");
+  await updateDoc(doc(db(), AGENTS, uid), { photoUrl: value });
 }
 
 /** Read the member's saved photoUrl, or "" when none is stored / readable. */
