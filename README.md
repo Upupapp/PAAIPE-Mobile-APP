@@ -3,7 +3,7 @@
 React and TypeScript member/agent app with TanStack Start and Capacitor shells for iOS and Android.
 
 - Linode: application data and media (`api.paaipe.org`, `media.paaipe.org`).
-- Firebase: users and authentication.
+- Firebase: users/authentication and event registrations (Cloud Firestore, named database `paaipe`).
 - Netlify: the separate web portal's hosting.
 
 ## Development
@@ -14,10 +14,13 @@ Install Node.js and Bun, then:
 git clone https://github.com/Upupapp/PAAIPE-Mobile-APP.git
 cd PAAIPE-Mobile-APP
 bun install --frozen-lockfile
-cp .env.example .env.local
-# Fill in the PAAIPE Firebase configuration in .env.local.
 bun run dev
 ```
+
+The PAAIPE Firebase web config is public (protected by Firestore security rules,
+not secrecy) and ships as defaults in `src/lib/firebase.ts`, so the app runs
+without any setup. To point at a different Firebase project or API, copy
+`.env.example` to `.env.local` and override the `VITE_*` values.
 
 Local environment files, signing material, test credentials, build outputs and temporary review folders are excluded from Git.
 
