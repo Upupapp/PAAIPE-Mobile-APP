@@ -2090,6 +2090,25 @@ html.is-native .portal-shell.teresa-inside .drawer-layer {
   font-size: 12px;
   color: var(--sw-muted, #64748b);
 }
+.portal-shell.teresa-inside .feedback-question {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.portal-shell.teresa-inside .feedback-question > label {
+  font-weight: 600;
+  font-size: 14px;
+}
+.portal-shell.teresa-inside .cert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.portal-shell.teresa-inside .sponsor-logo img {
+  object-fit: contain;
+  background: #fff;
+}
 .portal-shell.teresa-inside .register-cta {
   display: grid;
   gap: 8px;

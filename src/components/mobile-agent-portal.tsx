@@ -56,12 +56,38 @@ import {
   getPlaylists,
   getDirectory,
   initialsFromName,
+  getEventSponsors,
+  getEventFeedbackWindow,
+  getEventFeedbackQuestions,
+  getMyEventFeedbackResponse,
+  submitEventFeedbackResponse,
+  getMyCertificates,
+  getMyEventCertificate,
+  emailMyEventCertificate,
+  getMyOrganizations,
+  createMyOrganization,
+  updateMyOrganization,
+  submitPartnerApplication,
+  describeFailure,
+  ApiRequestError,
   type ApiEvent,
   type ApiSession,
   type ApiMicro,
   type ApiPlaylist,
   type DirectoryMember,
+  type EventSponsor,
+  type FeedbackWindow,
+  type FeedbackQuestion,
+  type MeCertificate,
+  type EventCertificate,
+  type ApiOrganization,
 } from "../lib/api";
+import {
+  uploadProfilePhoto,
+  persistAgentPhotoUrl,
+  readAgentPhotoUrl,
+  rejectPhotoFile,
+} from "../lib/media";
 import { tryPatchProfile } from "../lib/auth-context";
 import { type DisplayIdentity } from "../lib/profile-display";
 import { openExternalUrl } from "../lib/legal-links";
@@ -464,6 +490,10 @@ export function MobileAgentPortal() {
   const [preview, setPreview] = useState(false);
   const [directoryOffset, setDirectoryOffset] = useState(0);
   const signedIn = Boolean(user && profileState === "ready" && identity?.status !== "suspended");
+  const getToken = useCallback(
+    async (): Promise<string | null> => (user ? user.getIdToken() : null),
+    [user],
+  );
   const showPortal = signedIn || preview;
   const usePreviewData = preview && !signedIn;
   const portalIdentity = identity ?? (preview ? PREVIEW_IDENTITY : null);
@@ -1202,6 +1232,8 @@ export function MobileAgentPortal() {
               pendingCount={pendingRegistrations}
               onSyncNow={syncPendingRegistrations}
               registeredCounts={eventCounts}
+              getToken={getToken}
+              signedIn={signedIn}
             />
           )}
           {active === "Profile" && (
@@ -2379,58 +2411,152 @@ function LearnView({
   );
 }
 
-const EVENT_FEEDBACK_KEY = "paaipe-event-feedback";
-type EventFeedbackEntry = { rating: number; comment: string };
-function readEventFeedback(): Record<string, EventFeedbackEntry> {
-  try {
-    const raw = localStorage.getItem(EVENT_FEEDBACK_KEY);
-    if (!raw) return {};
-    const value = JSON.parse(raw) as unknown;
-    return value && typeof value === "object" ? (value as Record<string, EventFeedbackEntry>) : {};
-  } catch {
-    return {};
-  }
-}
+type FeedbackAnswers = Record<string, string | number>;
 
-function EventFeedback({ eventId }: { eventId: string }) {
-  const existing = readEventFeedback()[eventId] ?? null;
-  const [saved, setSaved] = useState<EventFeedbackEntry | null>(existing);
-  const [editing, setEditing] = useState(!existing);
-  const [rating, setRating] = useState(existing?.rating ?? 0);
-  const [comment, setComment] = useState(existing?.comment ?? "");
+/**
+ * Real event feedback. Loads the feedback window + questions from the API and,
+ * for a signed-in member with a confirmed registration, reads or submits their
+ * one response. Window state (locked/open/closed) and a prior submission are
+ * honored — nothing is stored locally and nothing is faked.
+ */
+function EventFeedback({
+  eventId,
+  registrationId,
+  getToken,
+  signedIn,
+}: {
+  eventId: string;
+  registrationId: string | null;
+  getToken: () => Promise<string | null>;
+  signedIn: boolean;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [window, setWindow] = useState<FeedbackWindow | null>(null);
+  const [questions, setQuestions] = useState<FeedbackQuestion[]>([]);
+  const [answers, setAnswers] = useState<FeedbackAnswers>({});
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
-  const submit = () => {
-    if (!rating) return;
-    const entry: EventFeedbackEntry = { rating, comment: comment.trim() };
-    const all = readEventFeedback();
-    all[eventId] = entry;
-    localStorage.setItem(EVENT_FEEDBACK_KEY, JSON.stringify(all));
-    setSaved(entry);
-    setEditing(false);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setLoadError("");
+    void (async () => {
+      try {
+        const token = signedIn ? await getToken() : null;
+        const [win, qs] = await Promise.all([
+          getEventFeedbackWindow(eventId),
+          getEventFeedbackQuestions(eventId),
+        ]);
+        let existing = null;
+        if (token && registrationId)
+          existing = await getMyEventFeedbackResponse(token, eventId, registrationId);
+        if (!alive) return;
+        setWindow(win);
+        setQuestions(qs);
+        if (existing) {
+          setAnswers(existing.answers);
+          setSubmittedAt(existing.submittedAt ?? "");
+        }
+      } catch (error) {
+        if (alive) setLoadError(describeFailure(error).message);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [eventId, registrationId, signedIn, getToken]);
+
+  const setAnswer = (key: string, value: string | number) =>
+    setAnswers((current) => ({ ...current, [key]: value }));
+
+  const missingRequired = questions.some(
+    (q) => q.required && (answers[q.questionKey] === undefined || answers[q.questionKey] === ""),
+  );
+
+  const submit = async () => {
+    if (!registrationId) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const token = await getToken();
+      if (!token) throw new ApiRequestError(401, "Sign in to send feedback.");
+      await submitEventFeedbackResponse(token, eventId, { registrationId, answers });
+      setSubmittedAt(new Date().toISOString());
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        setSubmittedAt(new Date().toISOString());
+      } else if (error instanceof ApiRequestError && error.status === 403) {
+        setSubmitError("The feedback window is not open. Your feedback was not sent.");
+      } else {
+        setSubmitError(describeFailure(error).message);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  if (saved && !editing) {
+  if (loading) {
+    return (
+      <section className="feedback-card">
+        <p className="feedback-note">Loading feedback…</p>
+      </section>
+    );
+  }
+  if (loadError) {
+    return (
+      <section className="feedback-card">
+        <p className="feedback-note">{loadError}</p>
+      </section>
+    );
+  }
+  if (!questions.length) {
+    return (
+      <section className="feedback-card">
+        <p className="feedback-note">No feedback form has been published for this event.</p>
+      </section>
+    );
+  }
+  if (submittedAt !== null) {
     return (
       <section className="feedback-card">
         <div className="feedback-head">
-          <strong>Your feedback</strong>
-          <button type="button" className="text-link" onClick={() => setEditing(true)}>
-            Edit
-          </button>
+          <strong>Thanks for your feedback</strong>
         </div>
-        <div className="feedback-stars" aria-label={`You rated ${saved.rating} of 5`}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Star
-              key={n}
-              className={n <= saved.rating ? "on" : ""}
-              fill={n <= saved.rating ? "currentColor" : "none"}
-            />
-          ))}
-        </div>
-        {saved.comment ? <p className="feedback-comment">“{saved.comment}”</p> : null}
         <p className="feedback-note">
-          Saved on this device. Sending feedback to PAAIPE is not connected in this build, so
-          nothing was submitted to the association.
+          Your response was sent to PAAIPE. Feedback can be submitted once per event.
+        </p>
+      </section>
+    );
+  }
+  if (!signedIn || !registrationId) {
+    return (
+      <section className="feedback-card">
+        <div className="feedback-head">
+          <strong>Share feedback</strong>
+        </div>
+        <p className="feedback-note">
+          {signedIn
+            ? "Feedback opens once your registration for this event is confirmed with PAAIPE."
+            : "Sign in and register for this event to share feedback with PAAIPE."}
+        </p>
+      </section>
+    );
+  }
+  if (window && window.state !== "open") {
+    return (
+      <section className="feedback-card">
+        <div className="feedback-head">
+          <strong>Feedback</strong>
+        </div>
+        <p className="feedback-note">
+          {window.state === "locked"
+            ? "The feedback window for this event has not opened yet."
+            : "The feedback window for this event has closed."}
         </p>
       </section>
     );
@@ -2441,36 +2567,242 @@ function EventFeedback({ eventId }: { eventId: string }) {
       <div className="feedback-head">
         <strong>Share feedback</strong>
       </div>
-      <div className="feedback-stars" role="radiogroup" aria-label="Rating">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            role="radio"
-            aria-checked={rating === n}
-            aria-label={`${n} star${n > 1 ? "s" : ""}`}
-            className={n <= rating ? "on" : ""}
-            onClick={() => setRating(n)}
-          >
-            <Star fill={n <= rating ? "currentColor" : "none"} />
-          </button>
-        ))}
-      </div>
-      <textarea
-        className="feedback-input"
-        value={comment}
-        onChange={(event) => setComment(event.target.value)}
-        rows={3}
-        placeholder="What worked? What could be better?"
-      />
-      <button type="button" className="feedback-save" disabled={!rating} onClick={submit}>
-        Save feedback
+      {questions.map((question) => (
+        <div className="feedback-question" key={question.questionKey}>
+          <label>
+            {question.prompt}
+            {question.required ? " *" : ""}
+          </label>
+          {question.type === "1-5" ? (
+            <div className="feedback-stars" role="radiogroup" aria-label={question.prompt}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  role="radio"
+                  aria-checked={answers[question.questionKey] === n}
+                  aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                  className={n <= Number(answers[question.questionKey] ?? 0) ? "on" : ""}
+                  onClick={() => setAnswer(question.questionKey, n)}
+                >
+                  <Star
+                    fill={n <= Number(answers[question.questionKey] ?? 0) ? "currentColor" : "none"}
+                  />
+                </button>
+              ))}
+            </div>
+          ) : question.type === "yes-no" ? (
+            <div className="filter-pills">
+              {["yes", "no"].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={answers[question.questionKey] === value ? "selected" : ""}
+                  aria-pressed={answers[question.questionKey] === value}
+                  onClick={() => setAnswer(question.questionKey, value)}
+                >
+                  {value === "yes" ? "Yes" : "No"}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <textarea
+              className="feedback-input"
+              value={String(answers[question.questionKey] ?? "")}
+              onChange={(event) => setAnswer(question.questionKey, event.target.value)}
+              rows={3}
+              placeholder="Your answer"
+            />
+          )}
+        </div>
+      ))}
+      {submitError ? (
+        <p className="feedback-note" role="alert">
+          {submitError}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className="feedback-save"
+        disabled={submitting || missingRequired}
+        onClick={() => void submit()}
+      >
+        {submitting ? "Sending…" : "Send feedback"}
       </button>
-      <p className="feedback-note">
-        Your rating and notes are kept on this device only. Sending feedback to PAAIPE is not
-        connected in this build yet — this does not submit anything to the association.
-      </p>
+      <p className="feedback-note">Your response goes to PAAIPE and can be sent once per event.</p>
     </section>
+  );
+}
+
+/** Confirmed sponsors for an event, joined to their organization. Public data. */
+function EventSponsors({ eventId }: { eventId: string }) {
+  const [sponsors, setSponsors] = useState<EventSponsor[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void getEventSponsors(eventId).then(
+      (rows) => {
+        if (alive) setSponsors(rows);
+      },
+      () => {
+        if (alive) setSponsors([]);
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [eventId]);
+  if (!sponsors || sponsors.length === 0) return null;
+  return (
+    <>
+      <h2 className="subheading">{sponsors.length > 1 ? "Sponsors" : "Sponsor"}</h2>
+      <div className="program-list">
+        {sponsors.map((sponsor) => {
+          const org = sponsor.organization;
+          const name = org?.name || sponsor.organizationId;
+          const website = org?.website || "";
+          return (
+            <article className="program-card speaker-card" key={sponsor.id}>
+              <div className="avatar speaker-avatar sponsor-logo">
+                {org?.logoUrl ? (
+                  <img src={org.logoUrl} alt={name} />
+                ) : (
+                  initialsFromName(name)
+                )}
+              </div>
+              <div>
+                <strong>{name}</strong>
+                {sponsor.tier ? <p>{sponsor.tier} sponsor</p> : null}
+                {website ? (
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => void openExternalUrl(website)}
+                  >
+                    Visit website
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+/** Per-event certificate state, with download + re-send email when issued. */
+function EventCertificateCard({
+  eventId,
+  getToken,
+  signedIn,
+}: {
+  eventId: string;
+  getToken: () => Promise<string | null>;
+  signedIn: boolean;
+}) {
+  const [state, setState] = useState<EventCertificate | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [emailing, setEmailing] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    if (!signedIn) {
+      setLoaded(true);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      try {
+        const token = await getToken();
+        const cert = token ? await getMyEventCertificate(token, eventId) : null;
+        if (alive) setState(cert);
+      } catch {
+        /* honest empty */
+      } finally {
+        if (alive) setLoaded(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [eventId, signedIn, getToken]);
+
+  if (!loaded || !signedIn) return null;
+  if (!state || state.state === "not_registered") return null;
+
+  const cert = state.certificate;
+  const emailCert = async () => {
+    setEmailing(true);
+    setNotice("");
+    try {
+      const token = await getToken();
+      if (!token) throw new ApiRequestError(401, "Sign in to email your certificate.");
+      const result = await emailMyEventCertificate(token, eventId);
+      setNotice(
+        result.emailedAt
+          ? "We've emailed your certificate to your PAAIPE address."
+          : "Your certificate email was requested.",
+      );
+    } catch (error) {
+      setNotice(describeFailure(error).message);
+    } finally {
+      setEmailing(false);
+    }
+  };
+
+  return (
+    <>
+      <h2 className="subheading">Certificate</h2>
+      <section className="feedback-card">
+        {state.state === "issued" && cert ? (
+          <>
+            <div className="feedback-head">
+              <strong>Certificate of Participation</strong>
+              <span className="soft-chip ok">Issued</span>
+            </div>
+            <div className="cert-actions">
+              {cert.pdfUrl ? (
+                <button
+                  type="button"
+                  className="register-button"
+                  onClick={() => void openExternalUrl(cert.pdfUrl)}
+                >
+                  Download PDF
+                </button>
+              ) : null}
+              {cert.pngUrl ? (
+                <button
+                  type="button"
+                  className="text-link"
+                  onClick={() => void openExternalUrl(cert.pngUrl)}
+                >
+                  View image
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="text-link"
+                disabled={emailing}
+                onClick={() => void emailCert()}
+              >
+                {emailing ? "Emailing…" : "Email it to me"}
+              </button>
+            </div>
+            {notice ? <p className="feedback-note">{notice}</p> : null}
+          </>
+        ) : (
+          <p className="feedback-note">
+            {state.state === "awaiting_feedback_open"
+              ? "Your certificate will be available after the feedback window opens and you submit feedback."
+              : state.state === "feedback_open"
+                ? "Submit your event feedback to unlock your Certificate of Participation."
+                : state.state === "issuing"
+                  ? "Your certificate is being issued. Check back shortly."
+                  : "A certificate is not available for this event."}
+          </p>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -2692,6 +3024,8 @@ function EventsView({
   pendingCount,
   onSyncNow,
   registeredCounts,
+  getToken,
+  signedIn,
 }: {
   events: ApiEvent[];
   loadState: Loadable<ApiEvent[]>;
@@ -2708,6 +3042,8 @@ function EventsView({
   pendingCount: number;
   onSyncNow: () => Promise<number>;
   registeredCounts: EventCounts | null;
+  getToken: () => Promise<string | null>;
+  signedIn: boolean;
 }) {
   const [period, setPeriod] = useState<"Upcoming" | "Past">("Upcoming");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -3072,6 +3408,7 @@ function EventsView({
             </div>
           </>
         ) : null}
+        <EventSponsors eventId={selected.id} />
         <h2 className="subheading">{held ? "After the session" : "What to expect"}</h2>
         <div className="program-list">
           {(held
@@ -3104,8 +3441,14 @@ function EventsView({
         </div>
         {held ? (
           <>
+            <EventCertificateCard eventId={selected.id} getToken={getToken} signedIn={signedIn} />
             <h2 className="subheading">Feedback</h2>
-            <EventFeedback eventId={selected.id} />
+            <EventFeedback
+              eventId={selected.id}
+              registrationId={ticket?.synced ? ticket.reference : null}
+              getToken={getToken}
+              signedIn={signedIn}
+            />
           </>
         ) : null}
         <div className="empty-note">
