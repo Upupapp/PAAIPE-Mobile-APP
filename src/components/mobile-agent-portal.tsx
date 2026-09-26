@@ -71,6 +71,7 @@ import {
   readRegistrationTelemetry,
   offlineWriteRate,
 } from "../lib/telemetry";
+import { fetchEventCounts, countsEndpointConfigured, type EventCounts } from "../lib/counts";
 import { useLoadable, type Loadable } from "../hooks/use-loadable";
 import { DataState, MembershipPanel, ProfileGate } from "./membership-panel";
 import { AppHaptics } from "../lib/app-haptics";
@@ -886,6 +887,24 @@ export function MobileAgentPortal() {
   };
   const unreadCount = notifications.filter((item) => !item.read).length;
   const pendingRegistrations = Object.values(tickets).filter((ticket) => ticket.pending).length;
+  const [eventCounts, setEventCounts] = useState<EventCounts | null>(null);
+  useEffect(() => {
+    if (!showPortal || !countsEndpointConfigured()) return;
+    let active = true;
+    const load = () => {
+      void fetchEventCounts().then((data) => {
+        if (active && data) setEventCounts(data);
+      });
+    };
+    load();
+    window.addEventListener("online", load);
+    window.addEventListener("paaipe:resume", load);
+    return () => {
+      active = false;
+      window.removeEventListener("online", load);
+      window.removeEventListener("paaipe:resume", load);
+    };
+  }, [showPortal]);
   const savePublicCard = async (next: PublicCard) => {
     const saved = { ...next, name: next.name.trim() };
     setPublicCard(saved);
@@ -1008,6 +1027,7 @@ export function MobileAgentPortal() {
               verificationNotice={verificationNotice}
               pendingCount={pendingRegistrations}
               onSyncNow={syncPendingRegistrations}
+              registeredCounts={eventCounts}
             />
           )}
           {active === "Profile" && (
@@ -2289,6 +2309,7 @@ function EventsView({
   verificationNotice,
   pendingCount,
   onSyncNow,
+  registeredCounts,
 }: {
   events: ApiEvent[];
   loadState: Loadable<ApiEvent[]>;
@@ -2304,6 +2325,7 @@ function EventsView({
   verificationNotice: string | null;
   pendingCount: number;
   onSyncNow: () => Promise<number>;
+  registeredCounts: EventCounts | null;
 }) {
   const [period, setPeriod] = useState<"Upcoming" | "Past">("Upcoming");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -2590,6 +2612,12 @@ function EventsView({
             </span>
           )}
           {selected.format ? <span className="soft-chip">{selected.format}</span> : null}
+          {typeof registeredCounts?.counts[selected.id] === "number" ? (
+            <span>
+              <UsersRound />
+              {registeredCounts.counts[selected.id]} registered
+            </span>
+          ) : null}
         </div>
         {!held ? (
           ticket ? (
@@ -2739,6 +2767,12 @@ function EventsView({
                     {event.endTime ? ` – ${event.endTime}` : ""}
                   </span>
                 )}
+                {typeof registeredCounts?.counts[event.id] === "number" ? (
+                  <span>
+                    <UsersRound />
+                    {registeredCounts.counts[event.id]} registered
+                  </span>
+                ) : null}
               </div>
               {(event.description || event.topic) && <p>{event.description || event.topic}</p>}
               {tickets[event.id] ? (
